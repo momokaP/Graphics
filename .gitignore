@@ -1,0 +1,8 @@
+.vs/
+**/.vs/
+**/Binaries/
+**/Intermediate/
+**/Debug/
+**/Release/
+**/x64/
+**/x86/
