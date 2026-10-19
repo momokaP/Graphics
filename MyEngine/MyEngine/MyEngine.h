@@ -4,6 +4,9 @@
 #include "DXSample.h"
 #include "GeometryGenerator.h"
 
+#include <directxtk12/ResourceUploadBatch.h>
+#include <directxtk12/WICTextureLoader.h>
+
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
@@ -103,6 +106,8 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW m_indexBufferView;*/
 
+	ComPtr<ID3D12Resource> m_texture;
+
 	VertexBuffer m_vertexBuffer;
 	IndexBuffer m_indexBuffer;
 	
@@ -139,7 +144,7 @@ private:
 	ComPtr<ID3D12Fence> m_fence;
 	UINT64 m_fenceValue;
 
-	UINT m_imguiSrvNext = 3;
+	UINT m_imguiSrvNext = 4;
 
 	void LoadPipeline();
 	void LoadAssets();

@@ -131,9 +131,8 @@ struct PSInput
     float3 color : COLOR; // Normal lines 쉐이더에서 사용
 };
 
-//Texture2D g_texture0 : register(t0);
-//Texture2D g_texture1 : register(t1);
-//SamplerState g_sampler : register(s0);
+Texture2D g_texture0 : register(t0);
+SamplerState g_sampler : register(s0);
 
 float4 main(PSInput input) : SV_TARGET
 {   
@@ -164,7 +163,7 @@ float4 main(PSInput input) : SV_TARGET
         color += ComputeSpotLight(light[i], material, input.posWorld, input.normalWorld, toEye);
     }
     
-    return float4(color, 1.0);
-    // return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
+    //return float4(color, 1.0);
+    return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
 
 }

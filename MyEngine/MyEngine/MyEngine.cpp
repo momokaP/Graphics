@@ -113,7 +113,7 @@ void MyEngine::LoadPipeline()
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	
 		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-		cbvHeapDesc.NumDescriptors = 3 + 8;
+		cbvHeapDesc.NumDescriptors = 4 + 8;
 		cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		ThrowIfFailed(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
@@ -145,8 +145,8 @@ void MyEngine::LoadAssets()
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
 
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
-		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 
 		// VS: 힙 0,1번 칸 → b0, b1
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, 0,
@@ -158,6 +158,25 @@ void MyEngine::LoadAssets()
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
 
+		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_PIXEL);
+
+		D3D12_STATIC_SAMPLER_DESC sampler = {};
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		sampler.MipLODBias = 0;
+		sampler.MaxAnisotropy = 0;
+		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+		sampler.MinLOD = 0.0f;
+		sampler.MaxLOD = D3D12_FLOAT32_MAX;
+		sampler.ShaderRegister = 0;
+		sampler.RegisterSpace = 0;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -165,7 +184,7 @@ void MyEngine::LoadAssets()
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
 
 		ComPtr<ID3DBlob> signature;
 		ComPtr<ID3DBlob> error;
@@ -232,6 +251,33 @@ void MyEngine::LoadAssets()
 		cbvHandle.Offset(1, cbvDescriptorSize);
 		m_BasicPixelConstantBuffer = CreateConstantBuffer(m_device.Get(), m_BasicPixelConstantBufferData,
 			cbvHandle);
+	}
+
+	// Create the texture.
+	{
+		DirectX::ResourceUploadBatch upload(m_device.Get());
+		upload.Begin();
+
+		ThrowIfFailed(DirectX::CreateWICTextureFromFile(
+			m_device.Get(), upload,
+			GetAssetFullPath(L"kotone.png").c_str(),   // png, jpg, bmp 등
+			m_texture.ReleaseAndGetAddressOf()));
+
+		// 업로드 실행 후 완료까지 대기 (결과 텍스처는 PIXEL_SHADER_RESOURCE 상태)
+		auto finish = upload.End(m_commandQueue.Get());
+		finish.wait();
+
+		// m_cbvHeap 3번 칸에 SRV 생성
+		UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), 3, inc);
+
+		D3D12_RESOURCE_DESC texDesc = m_texture->GetDesc();
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format = texDesc.Format;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = texDesc.MipLevels;
+		m_device->CreateShaderResourceView(m_texture.Get(), &srvDesc, srvHandle);
 	}
 
 	{
@@ -392,8 +438,10 @@ void MyEngine::PopulateCommandList()
 	
 	gpuHandle.Offset(2, cbvDescriptorSize);
 	m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
-	//m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
 	
+	gpuHandle.Offset(1, cbvDescriptorSize);
+	m_commandList->SetGraphicsRootDescriptorTable(2, gpuHandle);
+
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);

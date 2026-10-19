@@ -10,5 +10,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 
 int main()
 {
+	ThrowIfFailed(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
 	return WinMain(GetModuleHandle(nullptr), nullptr, GetCommandLineA(), SW_SHOWDEFAULT);
 }

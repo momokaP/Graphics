@@ -1,6 +1,6 @@
 #pragma once
 
-#include <directxtk/SimpleMath.h>
+#include <directxtk12/SimpleMath.h>
 #include <vector>
 
 using DirectX::SimpleMath::Vector2;
