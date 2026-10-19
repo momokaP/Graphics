@@ -32,8 +32,10 @@ private:
 
 	struct Vertex
 	{
-		XMFLOAT3 position;
-		XMFLOAT4 color;
+		Vector3 position;
+		Vector3 normal;
+		Vector2 texcoord;
+		Vector3 color;
 	};
 
 	struct SceneConstantBuffer
@@ -51,6 +53,36 @@ private:
 		Matrix projection;
 	};
 	static_assert((sizeof(BasicVertexConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
+
+	// 재질
+	struct Material {
+		Vector3 ambient = Vector3(0.1f);  // 12
+		float shininess = 1.0f;           // 4
+		Vector3 diffuse = Vector3(0.5f);  // 12
+		float dummy1;                     // 4
+		Vector3 specular = Vector3(0.5f); // 12
+		float dummy2;                     // 4
+	};
+
+	// 조명
+	struct Light {
+		Vector3 strength = Vector3(1.0f);              // 12
+		float fallOffStart = 0.0f;                     // 4
+		Vector3 direction = Vector3(0.0f, 0.0f, 1.0f); // 12
+		float fallOffEnd = 10.0f;                      // 4
+		Vector3 position = Vector3(0.0f, 0.0f, -2.0f); // 12
+		float spotPower = 1.0f;                        // 4
+	};
+
+#define MAX_LIGHTS 3
+	struct BasicPixelConstantBuffer {
+		Vector3 eyeWorld;         // 12
+		bool useTexture;          // 4
+		Material material;        // 48
+		Light lights[MAX_LIGHTS]; // 48 * MAX_LIGHTS
+		float padding[12];
+	};
+	static_assert((sizeof(BasicPixelConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
 	CD3DX12_VIEWPORT m_viewport;
 	CD3DX12_RECT m_scissorRect;
@@ -79,6 +111,14 @@ private:
 
 	ConstantBuffer m_BasicVertexConstantBuffer;
 	BasicVertexConstantBuffer m_BasicVertexConstantBufferData;
+	
+	ConstantBuffer m_BasicPixelConstantBuffer;
+	BasicPixelConstantBuffer m_BasicPixelConstantBufferData;
+
+	int m_lightType = 0;
+	Light m_lightFromGUI;
+	float m_materialDiffuse = 0.7f;
+	float m_materialSpecular = 0.2f;
 
 	Vector3 m_modelTranslation = Vector3(0.0f);
     Vector3 m_modelRotation = Vector3(-0.6f, 1.0f, 0.0f);
@@ -99,7 +139,7 @@ private:
 	ComPtr<ID3D12Fence> m_fence;
 	UINT64 m_fenceValue;
 
-	UINT m_imguiSrvNext = 2;
+	UINT m_imguiSrvNext = 3;
 
 	void LoadPipeline();
 	void LoadAssets();

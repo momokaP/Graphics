@@ -8,7 +8,8 @@ MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 	m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
 	m_rtvDescriptorSize(0),
 	m_constantBufferData(),
-	m_BasicVertexConstantBufferData()
+	m_BasicVertexConstantBufferData(),
+	m_BasicPixelConstantBufferData()
 {
 }
 
@@ -112,7 +113,7 @@ void MyEngine::LoadPipeline()
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	
 		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-		cbvHeapDesc.NumDescriptors = 2 + 8;
+		cbvHeapDesc.NumDescriptors = 3 + 8;
 		cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		ThrowIfFailed(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
@@ -144,19 +145,24 @@ void MyEngine::LoadAssets()
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
 
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
 
+		// VS: Èü 0,1¹ø Ä­ ¡æ b0, b1
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, 0,
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+
+		// PS: Èü 2¹ø Ä­ ¡æ b0
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0,
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
@@ -178,7 +184,9 @@ void MyEngine::LoadAssets()
 
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 		};
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -216,8 +224,13 @@ void MyEngine::LoadAssets()
 		
 		m_constantBuffer = CreateConstantBuffer(m_device.Get(), m_constantBufferData, 
 			cbvHandle);
+
 		cbvHandle.Offset(1, cbvDescriptorSize);
 		m_BasicVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), m_BasicVertexConstantBufferData,
+			cbvHandle);
+
+		cbvHandle.Offset(1, cbvDescriptorSize);
+		m_BasicPixelConstantBuffer = CreateConstantBuffer(m_device.Get(), m_BasicPixelConstantBufferData,
 			cbvHandle);
 	}
 
@@ -272,16 +285,6 @@ void MyEngine::InitGUI()
 
 void MyEngine::OnUpdate(float dt)
 {
-	const float translationSpeed = 0.005f;
-	const float offsetBounds = 1.25f;
-
-	/*m_constantBufferData.offset.z += translationSpeed;
-	if (m_constantBufferData.offset.x > offsetBounds)
-	{
-		m_constantBufferData.offset.z = -offsetBounds;
-	}
-	memcpy(m_constantBuffer.mapped, &m_constantBufferData, sizeof(m_constantBufferData));*/
-
 	using namespace DirectX;
 
 	// ¸ðµ¨ÀÇ º¯È¯
@@ -305,6 +308,9 @@ void MyEngine::OnUpdate(float dt)
 		Matrix::CreateRotationY(m_viewRot) *
 		Matrix::CreateTranslation(0.0f, 0.0f, 2.0f);
 
+	m_BasicPixelConstantBufferData.eyeWorld = Vector3::Transform(
+		Vector3(0.0f), m_BasicVertexConstantBufferData.view.Invert());
+
 	m_BasicVertexConstantBufferData.view =
 		m_BasicVertexConstantBufferData.view.Transpose();
 
@@ -323,6 +329,25 @@ void MyEngine::OnUpdate(float dt)
 		m_BasicVertexConstantBufferData.projection.Transpose();
 
 	memcpy(m_BasicVertexConstantBuffer.mapped, &m_BasicVertexConstantBufferData, sizeof(m_BasicVertexConstantBufferData));
+
+	m_BasicPixelConstantBufferData.material.diffuse =
+		Vector3(m_materialDiffuse);
+	m_BasicPixelConstantBufferData.material.specular =
+		Vector3(m_materialSpecular);
+
+	// ¿©·¯ °³ Á¶¸í »ç¿ë ¿¹½Ã
+	for (int i = 0; i < MAX_LIGHTS; i++) {
+		// ´Ù¸¥ Á¶¸í ²ô±â
+		if (i != m_lightType) {
+			m_BasicPixelConstantBufferData.lights[i].strength *= 0.0f;
+		}
+		else {
+			m_BasicPixelConstantBufferData.lights[i] = m_lightFromGUI;
+		}
+	}
+
+	memcpy(m_BasicPixelConstantBuffer.mapped, &m_BasicPixelConstantBufferData, sizeof(m_BasicPixelConstantBufferData));
+
 }
 
 void MyEngine::OnRender()
@@ -359,7 +384,15 @@ void MyEngine::PopulateCommandList()
 	ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get() };
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+	UINT cbvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+	
+	gpuHandle.Offset(2, cbvDescriptorSize);
+	m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
+	//m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
 	
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -373,7 +406,7 @@ void MyEngine::PopulateCommandList()
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
-	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	const float clearColor[] = { 0.2f, 0.2f, 0.25f, 1.0f };
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBuffer.view);
@@ -409,13 +442,45 @@ void MyEngine::WaitForPreviousFrame()
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 }
 
-void MyEngine::UpdateGUI() {
-
+void MyEngine::UpdateGUI() 
+{
+	ImGui::Checkbox("Use Texture", &m_BasicPixelConstantBufferData.useTexture);
 	ImGui::SliderFloat3("m_modelTranslation", &m_modelTranslation.x, -2.0f,
 		2.0f);
 	ImGui::SliderFloat3("m_modelRotation", &m_modelRotation.x, -3.14f, 3.14f);
 	ImGui::SliderFloat3("m_modelScaling", &m_modelScaling.x, 0.1f, 2.0f);
 	ImGui::SliderFloat("m_viewRot", &m_viewRot, -3.14f, 3.14f);
+
+	ImGui::SliderFloat("Material Shininess",
+		&m_BasicPixelConstantBufferData.material.shininess, 1.0f,
+		256.0f);
+
+	if (ImGui::RadioButton("Directional Light", m_lightType == 0)) {
+		m_lightType = 0;
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Point Light", m_lightType == 1)) {
+		m_lightType = 1;
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Spot Light", m_lightType == 2)) {
+		m_lightType = 2;
+	}
+
+	ImGui::SliderFloat("Material Diffuse", &m_materialDiffuse, 0.0f, 1.0f);
+	ImGui::SliderFloat("Material Specular", &m_materialSpecular, 0.0f, 1.0f);
+
+	ImGui::SliderFloat3("Light Position", &m_lightFromGUI.position.x, -5.0f,
+		5.0f);
+
+	ImGui::SliderFloat("Light fallOffStart", &m_lightFromGUI.fallOffStart, 0.0f,
+		5.0f);
+
+	ImGui::SliderFloat("Light fallOffEnd", &m_lightFromGUI.fallOffEnd, 0.0f,
+		10.0f);
+
+	ImGui::SliderFloat("Light spotPower", &m_lightFromGUI.spotPower, 1.0f,
+		512.0f);
 
 	int newWidth = int(ImGui::GetWindowWidth());
 	if (newWidth != m_guiWidth)

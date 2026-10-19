@@ -1,3 +1,6 @@
+DirectX-Graphics-Samples, https://github.com/microsoft/directx-graphics-samples
+Introduction to Computer Graphics with DirectX 11, https://www.honglab.ai/
+
 //*********************************************************
 //
 // Copyright (c) Microsoft. All rights reserved.

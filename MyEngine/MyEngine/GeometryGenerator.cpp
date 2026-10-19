@@ -172,9 +172,9 @@ MeshData GeometryGenerator::MakeBox() {
     for (size_t i = 0; i < positions.size(); i++) {
         Vertex v;
         v.position = positions[i];
-        v.color = Vector4(colors[i].x, colors[i].y, colors[i].z, 1.0f);
-        //v.normal = normals[i];
-        //v.texcoord = texcoords[i];
+        v.color = colors[i];
+        v.normal = normals[i];
+        v.texcoord = texcoords[i];
         meshData.vertices.push_back(v);
     }
 

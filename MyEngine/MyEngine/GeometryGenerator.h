@@ -9,7 +9,9 @@ using DirectX::SimpleMath::Vector4;
 
 struct Vertex {
     Vector3 position;
-    Vector4 color;
+    Vector3 normal;
+    Vector2 texcoord;
+    Vector3 color;
 };
 
 struct MeshData {
