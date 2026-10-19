@@ -1,5 +1,9 @@
 #include "stdafx.h"
 #include "Win32Application.h"
+#include "MyEngine.h"
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
+	HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 HWND Win32Application::m_hwnd = nullptr;
 
@@ -47,6 +51,24 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdshow)
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+		else {
+			ImGui_ImplDX12_NewFrame();
+			ImGui_ImplWin32_NewFrame();
+			ImGui::NewFrame();
+
+			ImGui::Begin("Scene Control");
+			ImGui::Text("Average %.3f ms/frame (%.1f FPS)",
+				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			pSample->UpdateGUI();
+			ImGui::SetWindowPos(ImVec2(0.0f, 0.0f));
+
+			ImGui::End();
+			ImGui::Render();    // 드로우 데이터 확정
+
+			pSample->OnUpdate(ImGui::GetIO().DeltaTime);
+			pSample->OnRender(); // PopulateCommandList 안에서 ImGui가 함께 그려짐
+
+		}
 	}
 
 	pSample->OnDestroy();
@@ -56,6 +78,9 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdshow)
 
 LRESULT CALLBACK Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
+		return true;
+
 	DXSample* pSample = reinterpret_cast<DXSample*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 
 	switch (message)
@@ -66,7 +91,19 @@ LRESULT CALLBACK Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wP
 			SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
 		}
 		return 0;
-	
+
+	case WM_SIZE:
+		// Reset and resize swapchain
+		// std::cout << (UINT)LOWORD(lParam) << " " << (UINT)HIWORD(lParam)
+		//          << std::endl;
+		if (pSample)
+		{
+			int width = int(LOWORD(lParam));
+			int height = int(HIWORD(lParam));
+			pSample->OnSizeChanged(width, height, wParam == SIZE_MINIMIZED);
+		}
+		return 0;
+
 	case WM_KEYDOWN:
 		if (pSample)
 		{
@@ -81,13 +118,12 @@ LRESULT CALLBACK Win32Application::WindowProc(HWND hWnd, UINT message, WPARAM wP
 		}
 		return 0;
 
-	case WM_PAINT:
+	/*case WM_PAINT:
 		if (pSample)
 		{
-			pSample->OnUpdate();
-			pSample->OnRender();
+			
 		}
-		return 0;
+		return 0;*/
 
 	case WM_DESTROY:
 		PostQuitMessage(0);
