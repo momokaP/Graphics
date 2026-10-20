@@ -117,6 +117,14 @@ void MyEngine::LoadPipeline()
 		cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		ThrowIfFailed(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
+	
+		D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+		dsvHeapDesc.NumDescriptors = 1;
+		dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+		dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;   // DSV 힙은 shader visible 불가
+		ThrowIfFailed(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_dsvHeap)));
+	
+		CreateDepthBuffer(m_width, m_height);
 	}
 
 	{
@@ -214,10 +222,12 @@ void MyEngine::LoadAssets()
 		psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVertexShaderData, vertexShaderDataLength);
 		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderData, pixelShaderDataLength);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		// psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT); // Depth ON, LESS, Write ALL
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		/*psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;*/
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 1;
@@ -232,7 +242,16 @@ void MyEngine::LoadAssets()
 	ThrowIfFailed(m_commandList->Close());
 
 	{
-		MeshData meshData = GeometryGenerator::MakeBox();
+		// MeshData meshData = GeometryGenerator::MakeBox();
+
+		// MeshData meshData = GeometryGenerator::MakeCylinder(1.0f, 1.0f, 1.0f, 10);
+		
+		MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
+		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
+		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
+		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
+
+		// MeshData meshData = GeometryGenerator::MakeIcosahedron();
 
 		m_vertexBuffer = CreateVertexBuffer(m_device.Get(), meshData.vertices);
 		m_indexBuffer = CreateIndexBuffer(m_device.Get(), meshData.indices);
@@ -307,7 +326,7 @@ void MyEngine::InitGUI()
 	initInfo.CommandQueue = m_commandQueue.Get();
 	initInfo.NumFramesInFlight = FrameCount;
 	initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-	initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
+	initInfo.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	initInfo.SrvDescriptorHeap = m_cbvHeap.Get();
 	initInfo.UserData = this;
 	initInfo.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info,
@@ -452,10 +471,12 @@ void MyEngine::PopulateCommandList()
 	m_commandList->ResourceBarrier(1, &toRenderTarget);
  	
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
-	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
+	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
 	const float clearColor[] = { 0.2f, 0.2f, 0.25f, 1.0f };
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBuffer.view);
 	m_commandList->IASetIndexBuffer(&m_indexBuffer.view);
@@ -573,5 +594,30 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 	UpdateSceneViewport();
 
 	// 깊이 버퍼를 붙였다면 여기서 재생성
-	// CreateDepthBuffer(width, height);
+	m_depthStencil.Reset();
+	CreateDepthBuffer(width, height);
+}
+
+void MyEngine::CreateDepthBuffer(UINT width, UINT height)
+{
+	D3D12_CLEAR_VALUE clearValue = {};
+	clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+	clearValue.DepthStencil.Depth = 1.0f;
+	clearValue.DepthStencil.Stencil = 0;
+
+	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0,
+		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+
+	ThrowIfFailed(m_device->CreateCommittedResource(
+		&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue,
+		IID_PPV_ARGS(&m_depthStencil)));
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	m_device->CreateDepthStencilView(m_depthStencil.Get(), &dsvDesc,
+		m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
 }

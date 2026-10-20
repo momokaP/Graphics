@@ -101,6 +101,10 @@ private:
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
 	UINT m_rtvDescriptorSize;
 
+	ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
+	ComPtr<ID3D12Resource>       m_depthStencil;
+	void CreateDepthBuffer(UINT width, UINT height);
+
 	/*ComPtr<ID3D12Resource> m_vertexBuffer;
 	ComPtr<ID3D12Resource> m_indexBuffer;
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;

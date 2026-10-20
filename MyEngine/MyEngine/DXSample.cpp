@@ -134,9 +134,11 @@ VertexBuffer DXSample::CreateVertexBufferRaw(ID3D12Device* device, const void* d
 
 IndexBuffer DXSample::CreateIndexBufferRaw(ID3D12Device* device, const void* data, UINT indexCount, DXGI_FORMAT format)
 {
-	IndexBuffer indexBuffer;
-	const UINT indexBufferSize = indexCount * format;
+	assert(format == DXGI_FORMAT_R16_UINT || format == DXGI_FORMAT_R32_UINT);
+	const UINT stride = (format == DXGI_FORMAT_R16_UINT) ? 2 : 4;
+	const UINT indexBufferSize = indexCount * stride;
 
+	IndexBuffer indexBuffer;
 	indexBuffer.count = indexCount;
 
 	indexBuffer.resource = CreateUploadBuffer(device, indexBufferSize);

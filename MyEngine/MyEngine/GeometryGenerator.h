@@ -3,6 +3,8 @@
 #include <directxtk12/SimpleMath.h>
 #include <vector>
 
+using namespace DirectX;
+using DirectX::SimpleMath::Matrix;
 using DirectX::SimpleMath::Vector2;
 using DirectX::SimpleMath::Vector3;
 using DirectX::SimpleMath::Vector4;
@@ -25,5 +27,10 @@ public:
     static MeshData MakeBox();
     static MeshData MakeCylinder(const float bottomRadius,
         const float topRadius, float height,
-        int sliceCount);
+        int numSlices);
+    static MeshData MakeSphere(const float radius, const int numSlices,
+        const int numStacks);
+    static MeshData MakeTetrahedron();
+    static MeshData MakeIcosahedron();
+    static MeshData SubdivideToSphere(const float radius, MeshData meshData);
 };
