@@ -7,6 +7,8 @@
 #include <directxtk12/ResourceUploadBatch.h>
 #include <directxtk12/WICTextureLoader.h>
 
+#include "Vertex.h"
+
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
@@ -32,14 +34,6 @@ public:
 
 private:
 	static const UINT FrameCount = 2;
-
-	struct Vertex
-	{
-		Vector3 position;
-		Vector3 normal;
-		Vector2 texcoord;
-		Vector3 color;
-	};
 
 	struct SceneConstantBuffer
 	{
@@ -87,6 +81,16 @@ private:
 	};
 	static_assert((sizeof(BasicPixelConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
+	struct Mesh {
+		VertexBuffer           vb;
+		IndexBuffer            ib;
+		ComPtr<ID3D12Resource> texture;
+		UINT                   srvIndex = 3;   // 텍스처 없으면 기본 텍스처(3번 칸)
+	};
+	std::vector<Mesh> m_meshes;
+
+	static constexpr UINT kModelSrvStart = 16;
+
 	CD3DX12_VIEWPORT m_viewport;
 	CD3DX12_RECT m_scissorRect;
 	ComPtr<IDXGISwapChain3> m_swapChain;
@@ -104,6 +108,8 @@ private:
 	ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
 	ComPtr<ID3D12Resource>       m_depthStencil;
 	void CreateDepthBuffer(UINT width, UINT height);
+
+	void CreateTextureSrv(ID3D12Resource* tex, UINT heapIndex);
 
 	/*ComPtr<ID3D12Resource> m_vertexBuffer;
 	ComPtr<ID3D12Resource> m_indexBuffer;

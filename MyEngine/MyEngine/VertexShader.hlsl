@@ -17,7 +17,6 @@ struct VSInput
     float3 posModel : POSITION; //모델 좌표계의 위치 position
     float3 normalModel : NORMAL; // 모델 좌표계의 normal    
     float2 texcoord : TEXCOORD0; // <- 다음 예제에서 사용
-    float3 color : COLOR0; // <- 불필요 (쉐이딩)
 };
 
 struct PSInput
@@ -33,7 +32,7 @@ PSInput main(VSInput input)
 {
     PSInput output;
     float4 pos = float4(input.posModel, 1.0f);
-    pos = mul(pos, model);
+    pos = mul(pos, model); 
     
     output.posWorld = pos.xyz; // 월드 위치 따로 저장
 
@@ -42,7 +41,6 @@ PSInput main(VSInput input)
 
     output.posProj = pos;
     output.texcoord = input.texcoord;
-    //output.color = input.color; // 다른 쉐이더에서 사용
     output.color = float3(0.0f, 0.0f, 0.0f);
     
     float4 normal = float4(input.normalModel, 0.0f);

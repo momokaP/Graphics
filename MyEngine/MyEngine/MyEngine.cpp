@@ -1,5 +1,6 @@
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 #include "MyEngine.h"
+#include <filesystem>
 
 MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 	DXSample(width, height, name),
@@ -24,7 +25,7 @@ void MyEngine::UpdateSceneViewport()
 {
 	float sceneWidth = float(m_width) - float(m_guiWidth);
 	if (sceneWidth < 1.0f || m_height == 0)
-		return;   // GUI°¡ Ã¢ ÀüÃ¼¸¦ µ¤°Å³ª ÃÖ¼ÒÈ­µÈ °æ¿ì
+		return;   // GUIê°€ ì°½ ì „ì²´ë¥¼ ë®ê±°ë‚˜ ìµœì†Œí™”ëœ ê²½ìš°
 
 	m_viewport = CD3DX12_VIEWPORT(float(m_guiWidth), 0.0f, sceneWidth, float(m_height));
 	m_scissorRect = CD3DX12_RECT(m_guiWidth, 0, LONG(m_width), LONG(m_height));
@@ -113,7 +114,7 @@ void MyEngine::LoadPipeline()
 		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	
 		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-		cbvHeapDesc.NumDescriptors = 4 + 8;
+		cbvHeapDesc.NumDescriptors = 128;
 		cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		ThrowIfFailed(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
@@ -121,7 +122,7 @@ void MyEngine::LoadPipeline()
 		D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
 		dsvHeapDesc.NumDescriptors = 1;
 		dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-		dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;   // DSV ÈüÀº shader visible ºÒ°¡
+		dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;   // DSV í™ì€ shader visible ë¶ˆê°€
 		ThrowIfFailed(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_dsvHeap)));
 	
 		CreateDepthBuffer(m_width, m_height);
@@ -156,12 +157,12 @@ void MyEngine::LoadAssets()
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 
-		// VS: Èü 0,1¹ø Ä­ ¡æ b0, b1
+		// VS: í™ 0,1ë²ˆ ì¹¸ â†’ b0, b1
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, 0,
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
 
-		// PS: Èü 2¹ø Ä­ ¡æ b0
+		// PS: í™ 2ë²ˆ ì¹¸ â†’ b0
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0,
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
@@ -213,7 +214,6 @@ void MyEngine::LoadAssets()
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 		};
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -242,14 +242,17 @@ void MyEngine::LoadAssets()
 	ThrowIfFailed(m_commandList->Close());
 
 	{
-		// MeshData meshData = GeometryGenerator::MakeBox();
+		std::vector<MeshData> meshes =
+			GeometryGenerator::ReadFromFile("c:/Users/9451s/OneDrive/Documents/zaku2/", "zaku2.fbx");
+
+		MeshData meshData = GeometryGenerator::MakeBox();
 
 		// MeshData meshData = GeometryGenerator::MakeCylinder(1.0f, 1.0f, 1.0f, 10);
 		
-		MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
+		/*MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
 		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
 		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
-		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
+		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);*/
 
 		// MeshData meshData = GeometryGenerator::MakeIcosahedron();
 
@@ -274,29 +277,40 @@ void MyEngine::LoadAssets()
 
 	// Create the texture.
 	{
+		const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/zaku2/";
+		std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "zaku2.fbx");
+
 		DirectX::ResourceUploadBatch upload(m_device.Get());
 		upload.Begin();
 
-		ThrowIfFailed(DirectX::CreateWICTextureFromFile(
-			m_device.Get(), upload,
-			GetAssetFullPath(L"kotone.png").c_str(),   // png, jpg, bmp µî
-			m_texture.ReleaseAndGetAddressOf()));
+		// ê¸°ë³¸ í…ìŠ¤ì²˜ (3ë²ˆ ì¹¸) â€” ê¸°ì¡´ ì½”ë“œ ê·¸ëŒ€ë¡œ
+		ThrowIfFailed(DirectX::CreateWICTextureFromFile(m_device.Get(), upload,
+			GetAssetFullPath(L"kotone.png").c_str(), m_texture.ReleaseAndGetAddressOf()));
 
-		// ¾÷·Îµå ½ÇÇà ÈÄ ¿Ï·á±îÁö ´ë±â (°á°ú ÅØ½ºÃ³´Â PIXEL_SHADER_RESOURCE »óÅÂ)
-		auto finish = upload.End(m_commandQueue.Get());
-		finish.wait();
-
-		// m_cbvHeap 3¹ø Ä­¿¡ SRV »ı¼º
 		UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), 3, inc);
+		UINT nextSrv = kModelSrvStart;
 
-		D3D12_RESOURCE_DESC texDesc = m_texture->GetDesc();
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.Format = texDesc.Format;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Texture2D.MipLevels = texDesc.MipLevels;
-		m_device->CreateShaderResourceView(m_texture.Get(), &srvDesc, srvHandle);
+		for (const MeshData& md : meshDatas) {
+			Mesh mesh;
+			mesh.vb = CreateVertexBuffer(m_device.Get(), md.vertices);
+			mesh.ib = CreateIndexBuffer(m_device.Get(), md.indices);
+
+			if (!md.albedoTexturePath.empty() && std::filesystem::exists(md.albedoTexturePath)) {
+				std::wstring wpath = std::filesystem::path(md.albedoTexturePath).wstring();
+				if (SUCCEEDED(DirectX::CreateWICTextureFromFile(m_device.Get(), upload,
+					wpath.c_str(), mesh.texture.ReleaseAndGetAddressOf()))) {
+					mesh.srvIndex = nextSrv++;
+				}
+			}
+			m_meshes.push_back(std::move(mesh));
+		}
+
+		upload.End(m_commandQueue.Get()).wait();
+
+		// SRV ìƒì„± (ì—…ë¡œë“œê°€ ëë‚œ ë’¤ ë¦¬ì†ŒìŠ¤ ê¸°ì¤€)
+		CreateTextureSrv(m_texture.Get(), 3);
+		for (const Mesh& mesh : m_meshes)
+			if (mesh.texture) CreateTextureSrv(mesh.texture.Get(), mesh.srvIndex);
 	}
 
 	{
@@ -311,6 +325,20 @@ void MyEngine::LoadAssets()
 
 		WaitForPreviousFrame();
 	}
+}
+
+void MyEngine::CreateTextureSrv(ID3D12Resource* tex, UINT heapIndex)
+{
+	UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE h(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), heapIndex, inc);
+
+	D3D12_RESOURCE_DESC d = tex->GetDesc();
+	D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
+	srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srv.Format = d.Format;
+	srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srv.Texture2D.MipLevels = d.MipLevels;
+	m_device->CreateShaderResourceView(tex, &srv, h);
 }
 
 void MyEngine::InitGUI()
@@ -342,7 +370,7 @@ void MyEngine::InitGUI()
 	initInfo.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*,
 		D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE)
 		{
-			// Áö±İÀº ´Ü¼ø Áõ°¡ ÇÒ´çÀÌ¶ó ÇØÁ¦´Â »ı·« (³ªÁß¿¡ ÇÁ¸®¸®½ºÆ®·Î ±³Ã¼)
+			// ì§€ê¸ˆì€ ë‹¨ìˆœ ì¦ê°€ í• ë‹¹ì´ë¼ í•´ì œëŠ” ìƒëµ (ë‚˜ì¤‘ì— í”„ë¦¬ë¦¬ìŠ¤íŠ¸ë¡œ êµì²´)
 		};
 
 	ImGui_ImplDX12_Init(&initInfo);
@@ -352,7 +380,7 @@ void MyEngine::OnUpdate(float dt)
 {
 	using namespace DirectX;
 
-	// ¸ğµ¨ÀÇ º¯È¯
+	// ëª¨ë¸ì˜ ë³€í™˜
 	m_BasicVertexConstantBufferData.model =
 		Matrix::CreateScale(m_modelScaling) *
 		Matrix::CreateRotationY(m_modelRotation.y) *
@@ -368,7 +396,7 @@ void MyEngine::OnUpdate(float dt)
 	m_BasicVertexConstantBufferData.invTranspose =
 		m_BasicVertexConstantBufferData.invTranspose.Transpose().Invert();
 
-	// ½ÃÁ¡ º¯È¯
+	// ì‹œì  ë³€í™˜
 	m_BasicVertexConstantBufferData.view =
 		Matrix::CreateRotationY(m_viewRot) *
 		Matrix::CreateTranslation(0.0f, 0.0f, 2.0f);
@@ -379,8 +407,8 @@ void MyEngine::OnUpdate(float dt)
 	m_BasicVertexConstantBufferData.view =
 		m_BasicVertexConstantBufferData.view.Transpose();
 
-	// ÇÁ·ÎÁ§¼Ç
-	const float aspect = m_sceneAspect; // <- GUI¿¡¼­ Á¶Àı
+	// í”„ë¡œì ì…˜
+	const float aspect = m_sceneAspect; // <- GUIì—ì„œ ì¡°ì ˆ
 	if (m_usePerspectiveProjection) {
 		m_BasicVertexConstantBufferData.projection = XMMatrixPerspectiveFovLH(
 			XMConvertToRadians(m_projFovAngleY), aspect, m_nearZ, m_farZ);
@@ -400,9 +428,9 @@ void MyEngine::OnUpdate(float dt)
 	m_BasicPixelConstantBufferData.material.specular =
 		Vector3(m_materialSpecular);
 
-	// ¿©·¯ °³ Á¶¸í »ç¿ë ¿¹½Ã
+	// ì—¬ëŸ¬ ê°œ ì¡°ëª… ì‚¬ìš© ì˜ˆì‹œ
 	for (int i = 0; i < MAX_LIGHTS; i++) {
-		// ´Ù¸¥ Á¶¸í ²ô±â
+		// ë‹¤ë¥¸ ì¡°ëª… ë„ê¸°
 		if (i != m_lightType) {
 			m_BasicPixelConstantBufferData.lights[i].strength *= 0.0f;
 		}
@@ -457,9 +485,6 @@ void MyEngine::PopulateCommandList()
 	
 	gpuHandle.Offset(2, cbvDescriptorSize);
 	m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
-	
-	gpuHandle.Offset(1, cbvDescriptorSize);
-	m_commandList->SetGraphicsRootDescriptorTable(2, gpuHandle);
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -477,15 +502,19 @@ void MyEngine::PopulateCommandList()
 	const float clearColor[] = { 0.2f, 0.2f, 0.25f, 1.0f };
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+	
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBuffer.view);
-	m_commandList->IASetIndexBuffer(&m_indexBuffer.view);
-	//m_commandList->DrawInstanced(3, 1, 0, 0);
-	m_commandList->DrawIndexedInstanced(m_indexBuffer.count, 1, 0, 0, 0);
 
-	// ImGui: ¹Ú½º ´ÙÀ½, Present ¹è¸®¾î Àü
-	ID3D12DescriptorHeap* heaps[] = { m_cbvHeap.Get() };
-	m_commandList->SetDescriptorHeaps(_countof(heaps), heaps);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE heapStart(m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+	for (const Mesh& mesh : m_meshes) {
+		m_commandList->SetGraphicsRootDescriptorTable(2,
+			CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, mesh.srvIndex, cbvDescriptorSize));
+		m_commandList->IASetVertexBuffers(0, 1, &mesh.vb.view);
+		m_commandList->IASetIndexBuffer(&mesh.ib.view);
+		m_commandList->DrawIndexedInstanced(mesh.ib.count, 1, 0, 0, 0);
+	}
+
+	// ImGui: ë°•ìŠ¤ ë‹¤ìŒ, Present ë°°ë¦¬ì–´ ì „
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
 
 	auto toPresent = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -555,24 +584,24 @@ void MyEngine::UpdateGUI()
 	if (newWidth != m_guiWidth)
 	{
 		m_guiWidth = newWidth;
-		UpdateSceneViewport();   // OnUpdate Àü¿¡ aspect±îÁö È®Á¤
+		UpdateSceneViewport();   // OnUpdate ì „ì— aspectê¹Œì§€ í™•ì •
 	}
 }
 
 void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 {
-	// ÃÊ±âÈ­ ÀüÀÌ°Å³ª, ÃÖ¼ÒÈ­ / Å©±â 0ÀÌ¸é ¹«½Ã
+	// ì´ˆê¸°í™” ì „ì´ê±°ë‚˜, ìµœì†Œí™” / í¬ê¸° 0ì´ë©´ ë¬´ì‹œ
 	if (!m_swapChain || minimized || width == 0 || height == 0)
 		return;
 
-	// 1. GPU°¡ ÇöÀç ¹é¹öÆÛ¸¦ ´Ù ¾µ ¶§±îÁö ´ë±â
+	// 1. GPUê°€ í˜„ì¬ ë°±ë²„í¼ë¥¼ ë‹¤ ì“¸ ë•Œê¹Œì§€ ëŒ€ê¸°
 	WaitForPreviousFrame();
 
-	// 2. ¹é¹öÆÛ ÂüÁ¶ ÇØÁ¦ (DX11ÀÇ m_renderTargetView.Reset()¿¡ ÇØ´ç)
+	// 2. ë°±ë²„í¼ ì°¸ì¡° í•´ì œ (DX11ì˜ m_renderTargetView.Reset()ì— í•´ë‹¹)
 	for (UINT n = 0; n < FrameCount; n++)
 		m_renderTargets[n].Reset();
 
-	// 3. ½º¿ÒÃ¼ÀÎ ¹öÆÛ Å©±â º¯°æ
+	// 3. ìŠ¤ì™‘ì²´ì¸ ë²„í¼ í¬ê¸° ë³€ê²½
 	DXGI_SWAP_CHAIN_DESC desc = {};
 	m_swapChain->GetDesc(&desc);
 	ThrowIfFailed(m_swapChain->ResizeBuffers(FrameCount, width, height,
@@ -580,7 +609,7 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
-	// 4. RTV¸¦ °°Àº Èü Ä­¿¡ ´Ù½Ã »ı¼º (ÈüÀº Àç»ı¼º ºÒÇÊ¿ä)
+	// 4. RTVë¥¼ ê°™ì€ í™ ì¹¸ì— ë‹¤ì‹œ ìƒì„± (í™ì€ ì¬ìƒì„± ë¶ˆí•„ìš”)
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
 	for (UINT n = 0; n < FrameCount; n++)
 	{
@@ -589,11 +618,11 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 		rtvHandle.Offset(1, m_rtvDescriptorSize);
 	}
 
-	// 5. Å©±â ÀÇÁ¸ »óÅÂ °»½Å
+	// 5. í¬ê¸° ì˜ì¡´ ìƒíƒœ ê°±ì‹ 
 	UpdateForSizeChange(width, height);   // m_width, m_height, m_aspectRatio
 	UpdateSceneViewport();
 
-	// ±íÀÌ ¹öÆÛ¸¦ ºÙ¿´´Ù¸é ¿©±â¼­ Àç»ı¼º
+	// ê¹Šì´ ë²„í¼ë¥¼ ë¶™ì˜€ë‹¤ë©´ ì—¬ê¸°ì„œ ì¬ìƒì„±
 	m_depthStencil.Reset();
 	CreateDepthBuffer(width, height);
 }

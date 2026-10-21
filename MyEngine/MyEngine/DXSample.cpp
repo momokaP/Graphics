@@ -145,7 +145,7 @@ IndexBuffer DXSample::CreateIndexBufferRaw(ID3D12Device* device, const void* dat
 	CopyToBuffer(indexBuffer.resource.Get(), data, indexBufferSize);
 	
 	indexBuffer.view.BufferLocation = indexBuffer.resource->GetGPUVirtualAddress();
-	indexBuffer.view.Format = DXGI_FORMAT_R16_UINT;
+	indexBuffer.view.Format = format;
 	indexBuffer.view.SizeInBytes = indexBufferSize;
 
 	return indexBuffer;

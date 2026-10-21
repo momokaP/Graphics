@@ -3,23 +3,17 @@
 #include <directxtk12/SimpleMath.h>
 #include <vector>
 
+#include "Vertex.h"
+#include "MeshData.h"
+#include "ModelLoader.h"
+
+using namespace std;
+
 using namespace DirectX;
 using DirectX::SimpleMath::Matrix;
 using DirectX::SimpleMath::Vector2;
 using DirectX::SimpleMath::Vector3;
 using DirectX::SimpleMath::Vector4;
-
-struct Vertex {
-    Vector3 position;
-    Vector3 normal;
-    Vector2 texcoord;
-    Vector3 color;
-};
-
-struct MeshData {
-    std::vector<Vertex> vertices;
-    std::vector<uint16_t> indices;
-};
 
 class GeometryGenerator {
 public:
@@ -33,4 +27,5 @@ public:
     static MeshData MakeTetrahedron();
     static MeshData MakeIcosahedron();
     static MeshData SubdivideToSphere(const float radius, MeshData meshData);
+    static vector<MeshData> ReadFromFile(std::string basePath, std::string filename);
 };

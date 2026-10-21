@@ -171,7 +171,6 @@ MeshData GeometryGenerator::MakeBox() {
     for (size_t i = 0; i < positions.size(); i++) {
         Vertex v;
         v.position = positions[i];
-        v.color = colors[i];
         v.normal = normals[i];
         v.texcoord = texcoords[i];
         meshData.vertices.push_back(v);
@@ -230,7 +229,7 @@ MeshData GeometryGenerator::MakeCylinder(const float bottomRadius,
         vertices.push_back(v);
     }
 
-    vector<uint16_t>& indices = meshData.indices;
+    vector<uint32_t>& indices = meshData.indices;
 
     for (int i = 0; i < numSlices; i++) {
         indices.push_back(i);
@@ -284,7 +283,7 @@ MeshData GeometryGenerator::MakeSphere(const float radius, const int numSlices,
 
     // cout << vertices.size() << endl;
 
-    vector<uint16_t>& indices = meshData.indices;
+    vector<uint32_t>& indices = meshData.indices;
 
     for (int j = 0; j < numStacks; j++) {
 
@@ -480,3 +479,41 @@ MeshData GeometryGenerator::SubdivideToSphere(const float radius,
 
     return newMesh;
 }
+
+vector<MeshData> GeometryGenerator::ReadFromFile(std::string basePath, std::string filename)
+{
+    using namespace DirectX;
+
+    ModelLoader modelLoader;
+    std::vector<MeshData> meshes = modelLoader.Load(basePath, filename);
+
+    // Normalize vertices
+    Vector3 vmin(FLT_MAX), vmax(-FLT_MAX);
+    for (auto& mesh : meshes) {
+        for (auto& v : mesh.vertices) {
+            vmin.x = XMMin(vmin.x, v.position.x);
+            vmin.y = XMMin(vmin.y, v.position.y);
+            vmin.z = XMMin(vmin.z, v.position.z);
+            vmax.x = XMMax(vmax.x, v.position.x);
+            vmax.y = XMMax(vmax.y, v.position.y);
+            vmax.z = XMMax(vmax.z, v.position.z);
+        }
+    }
+
+    float dx = vmax.x - vmin.x, dy = vmax.y - vmin.y, dz = vmax.z - vmin.z;
+    float dl = XMMax(XMMax(dx, dy), dz);
+    if (dl < 1e-6f) dl = 1.0f;
+    float cx = (vmax.x + vmin.x) * 0.5f, cy = (vmax.y + vmin.y) * 0.5f,
+        cz = (vmax.z + vmin.z) * 0.5f;
+
+    for (auto& mesh : meshes) {
+        for (auto& v : mesh.vertices) {
+            v.position.x = (v.position.x - cx) / dl;
+            v.position.y = (v.position.y - cy) / dl;
+            v.position.z = (v.position.z - cz) / dl;
+        }
+    }
+
+    return meshes;
+}
+
