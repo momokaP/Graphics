@@ -154,8 +154,8 @@ void MyEngine::LoadAssets()
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
 
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[4];
-		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[6];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[6];
 
 		// VS: 힙 0,1번 칸 → b0, b1
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, 0,
@@ -174,6 +174,15 @@ void MyEngine::LoadAssets()
 		ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0,
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 		rootParameters[3].InitAsDescriptorTable(1, &ranges[3], D3D12_SHADER_VISIBILITY_PIXEL);
+
+		ranges[4].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0,
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+		rootParameters[4].InitAsDescriptorTable(1, &ranges[4], D3D12_SHADER_VISIBILITY_PIXEL);
+
+		ranges[5].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0,
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+		rootParameters[5].InitAsDescriptorTable(1, &ranges[5], D3D12_SHADER_VISIBILITY_PIXEL);
+
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
@@ -370,32 +379,42 @@ void MyEngine::LoadAssets()
 
 		bool isCubeMap = false;
 		ThrowIfFailed(CreateDDSTextureFromFileEx(
-			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057SpecularHDR.dds",
+			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057EnvHDR.dds",
 			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
 			m_cubeMapTexture.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
+		assert(isCubeMap);
+		isCubeMap = false;
+
+		ThrowIfFailed(CreateDDSTextureFromFileEx(
+			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057DiffuseHDR.dds",
+			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
+			m_cubeMapTextureDiffuse.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
+		assert(isCubeMap);
+		isCubeMap = false;
+
+		ThrowIfFailed(CreateDDSTextureFromFileEx(
+			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057SpecularHDR.dds",
+			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
+			m_cubeMapTextureSpecular.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
+		assert(isCubeMap);
+		isCubeMap = false;
 
 		upload.End(m_commandQueue.Get()).wait();
-		assert(isCubeMap);
-
+		
 		UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		CD3DX12_CPU_DESCRIPTOR_HANDLE h(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), kCubeMapSrvIndex, inc);
+		
+		CreateCubeSrv(m_cubeMapTexture.Get(), kCubeMapSrvIndex);          // 4
+		CreateCubeSrv(m_cubeMapTextureDiffuse.Get(), kCubeMapSrvIndexDiffuse);   // 5
+		CreateCubeSrv(m_cubeMapTextureSpecular.Get(), kCubeMapSrvIndexSpecular);  // 6
 
-		D3D12_RESOURCE_DESC d = m_cubeMapTexture->GetDesc();
-		D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-		srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srv.Format = d.Format;
-		srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;   // ← 핵심
-		srv.TextureCube.MipLevels = d.MipLevels;
-		m_device->CreateShaderResourceView(m_cubeMapTexture.Get(), &srv, h);
-
-		// 5번 칸(b0)
+		// 7번 칸(b0)
 		CD3DX12_CPU_DESCRIPTOR_HANDLE cbvH(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), kSkyboxCbvStart, inc);
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = {};
 		cbv.BufferLocation = m_constantBuffer.resource->GetGPUVirtualAddress();
 		cbv.SizeInBytes = (sizeof(m_constantBufferData) + 255) & ~255;
 		m_device->CreateConstantBufferView(&cbv, cbvH);
 
-		// 6번 칸(b1)
+		// 8번 칸(b1)
 		cbvH.Offset(1, inc);
 		m_skyboxVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), m_skyboxVertexConstantBufferData, cbvH);
 	}
@@ -581,6 +600,10 @@ void MyEngine::PopulateCommandList()
 	CD3DX12_GPU_DESCRIPTOR_HANDLE heapStart1(m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
 	m_commandList->SetGraphicsRootDescriptorTable(3,
 		CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart1, kCubeMapSrvIndex, cbvDescriptorSize));
+	m_commandList->SetGraphicsRootDescriptorTable(4,
+		CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart1, kCubeMapSrvIndexDiffuse, cbvDescriptorSize));
+	m_commandList->SetGraphicsRootDescriptorTable(5,
+		CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart1, kCubeMapSrvIndexSpecular, cbvDescriptorSize));
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -647,6 +670,21 @@ void MyEngine::WaitForPreviousFrame()
 	}
 
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+}
+
+void MyEngine::CreateCubeSrv(ID3D12Resource* tex, UINT heapIndex)
+{
+	UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE h(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), heapIndex, inc);
+
+	D3D12_RESOURCE_DESC d = tex->GetDesc();   // ← 넘겨받은 리소스 자신의 desc
+	D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
+	srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srv.Format = d.Format;
+	srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+	srv.TextureCube.MostDetailedMip = 0;
+	srv.TextureCube.MipLevels = UINT(-1);     // 해당 리소스의 모든 밉
+	m_device->CreateShaderResourceView(tex, &srv, h);
 }
 
 void MyEngine::UpdateGUI() 

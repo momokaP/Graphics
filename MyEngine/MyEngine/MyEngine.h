@@ -160,7 +160,7 @@ private:
 	ComPtr<ID3D12Fence> m_fence;
 	UINT64 m_fenceValue;
 
-	UINT m_imguiSrvNext = 7;
+	UINT m_imguiSrvNext = 10;
 
 	void LoadPipeline();
 	void LoadAssets();
@@ -170,8 +170,15 @@ private:
 	ComPtr<ID3D12Resource> m_cubeMapTexture;
 	static constexpr UINT kCubeMapSrvIndex = 4;
 
-	static constexpr UINT kSkyboxCbvStart = 5;   // 5: b0, 6: b1
+	ComPtr<ID3D12Resource> m_cubeMapTextureDiffuse;
+	static constexpr UINT kCubeMapSrvIndexDiffuse = 5;
+
+	ComPtr<ID3D12Resource> m_cubeMapTextureSpecular;
+	static constexpr UINT kCubeMapSrvIndexSpecular = 6;
+
+	static constexpr UINT kSkyboxCbvStart = 7;   // 7: b0, 8: b1
 	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // 같은 구조체 타입
 	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer 반환 타입
 
+	void CreateCubeSrv(ID3D12Resource* tex, UINT heapIndex);
 };

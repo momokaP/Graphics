@@ -136,10 +136,17 @@ struct PSInput
 };
 
 Texture2D g_texture0 : register(t0);
-TextureCube g_textureCube0 : register(t1);
+TextureCube g_textureCube : register(t1);
+TextureCube g_textureCubeDiffuse : register(t2);
+TextureCube g_textureCubeSpecular : register(t3);
 
 SamplerState g_sampler : register(s0);
 SamplerState g_linearSampler : register(s1);
+
+float3 ACESFilm(float3 x)   // 근사 ACES 톤매핑
+{
+    return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
+}
 
 float4 main(PSInput input) : SV_TARGET
 {   
@@ -180,7 +187,41 @@ float4 main(PSInput input) : SV_TARGET
     
     color += rim * rimColor * rimStrength;
 
-    return g_textureCube0.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
+    // return g_textureCube0.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
+    
+    {
+        float4 diffuse = g_textureCubeDiffuse.Sample(g_sampler, input.normalWorld);
+        float4 specular = g_textureCube.Sample(g_sampler, reflect(-toEye, input.normalWorld));
+    
+        const float exposure = 1.0; // 밝기 조절 (1~3 정도로 바꿔 보기)
+        diffuse = float4(ACESFilm(diffuse.xyz * exposure), 1.0);
+        diffuse.xyz = pow(diffuse.xyz, 1.0 / 2.2);
+        specular = float4(ACESFilm(specular.xyz * exposure), 1.0);
+        specular.xyz = pow(specular.xyz, 1.0 / 2.2);
+        
+        specular *= pow((specular.x + specular.y + specular.z) / 3.0, material.shininess);
+    
+        diffuse.xyz *= material.diffuse;
+        specular.xyz *= material.specular;
+    
+        if (useTexture)
+        {
+            diffuse *= g_texture0.Sample(g_sampler, input.texcoord);
+        }
+    
+        return diffuse + specular;
+    }
+    
+    {
+        //float3 hdr = g_textureCube.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
+
+        //const float exposure = 1.0; // 밝기 조절 (1~3 정도로 바꿔 보기)
+        //float3 color3 = ACESFilm(hdr * exposure); // HDR → 0~1
+        //color3 = pow(color3, 1.0 / 2.2); // 선형 → 감마 (모니터용)
+
+        //return float4(color3, 1.0);
+    }
+
     
     //return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
 }
