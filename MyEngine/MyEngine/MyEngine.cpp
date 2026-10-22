@@ -154,8 +154,8 @@ void MyEngine::LoadAssets()
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
 
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
-		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[4];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
 
 		// VS: 힙 0,1번 칸 → b0, b1
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, 0,
@@ -170,6 +170,10 @@ void MyEngine::LoadAssets()
 		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_PIXEL);
+
+		ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0,
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+		rootParameters[3].InitAsDescriptorTable(1, &ranges[3], D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
@@ -186,6 +190,11 @@ void MyEngine::LoadAssets()
 		sampler.RegisterSpace = 0;
 		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+		D3D12_STATIC_SAMPLER_DESC samplers[2] = { sampler, sampler };
+		samplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		samplers[1].AddressU = samplers[1].AddressV = samplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplers[1].ShaderRegister = 1;   // s1
+
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -193,7 +202,7 @@ void MyEngine::LoadAssets()
 			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, rootSignatureFlags);
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), samplers, rootSignatureFlags);
 
 		ComPtr<ID3DBlob> signature;
 		ComPtr<ID3DBlob> error;
@@ -237,14 +246,46 @@ void MyEngine::LoadAssets()
 		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
 	}
 
+	{
+		UINT8* pVertexShaderData = nullptr;
+		UINT8* pPixelShaderData = nullptr;
+		UINT vertexShaderDataLength = 0;
+		UINT pixelShaderDataLength = 0;
+
+		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"CubeMappingVertexShader.cso").c_str(), &pVertexShaderData, &vertexShaderDataLength));
+		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"CubeMappingPixelShader.cso").c_str(), &pPixelShaderData, &pixelShaderDataLength));
+
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = m_rootSignature.Get();
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVertexShaderData, vertexShaderDataLength);
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderData, pixelShaderDataLength);
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT); // Depth ON, LESS, Write ALL
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+
+		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_cubeMapPipelineState)));
+	}
+
 	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
 	ThrowIfFailed(m_commandList->Close());
 
 	{
-		std::vector<MeshData> meshes =
-			GeometryGenerator::ReadFromFile("c:/Users/9451s/OneDrive/Documents/zaku2/", "zaku2.fbx");
-
 		MeshData meshData = GeometryGenerator::MakeBox();
 
 		// MeshData meshData = GeometryGenerator::MakeCylinder(1.0f, 1.0f, 1.0f, 10);
@@ -280,8 +321,15 @@ void MyEngine::LoadAssets()
 		// const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/zaku2/";
 		// std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "zaku2_1.fbx");
 
-		const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/sinanju/";
-		std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "sinanju.gltf");
+		// const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/sinanju/";
+		// std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "sinanju.gltf");
+
+		MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
+		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
+		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
+		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
+		std::vector<MeshData> meshDatas;
+		meshDatas.push_back(meshData);
 
 		DirectX::ResourceUploadBatch upload(m_device.Get());
 		upload.Begin();
@@ -314,6 +362,42 @@ void MyEngine::LoadAssets()
 		CreateTextureSrv(m_texture.Get(), 3);
 		for (const Mesh& mesh : m_meshes)
 			if (mesh.texture) CreateTextureSrv(mesh.texture.Get(), mesh.srvIndex);
+	}
+
+	{
+		ResourceUploadBatch upload(m_device.Get());
+		upload.Begin();
+
+		bool isCubeMap = false;
+		ThrowIfFailed(CreateDDSTextureFromFileEx(
+			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057SpecularHDR.dds",
+			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
+			m_cubeMapTexture.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
+
+		upload.End(m_commandQueue.Get()).wait();
+		assert(isCubeMap);
+
+		UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		CD3DX12_CPU_DESCRIPTOR_HANDLE h(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), kCubeMapSrvIndex, inc);
+
+		D3D12_RESOURCE_DESC d = m_cubeMapTexture->GetDesc();
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
+		srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srv.Format = d.Format;
+		srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;   // ← 핵심
+		srv.TextureCube.MipLevels = d.MipLevels;
+		m_device->CreateShaderResourceView(m_cubeMapTexture.Get(), &srv, h);
+
+		// 5번 칸(b0)
+		CD3DX12_CPU_DESCRIPTOR_HANDLE cbvH(m_cbvHeap->GetCPUDescriptorHandleForHeapStart(), kSkyboxCbvStart, inc);
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = {};
+		cbv.BufferLocation = m_constantBuffer.resource->GetGPUVirtualAddress();
+		cbv.SizeInBytes = (sizeof(m_constantBufferData) + 255) & ~255;
+		m_device->CreateConstantBufferView(&cbv, cbvH);
+
+		// 6번 칸(b1)
+		cbvH.Offset(1, inc);
+		m_skyboxVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), m_skyboxVertexConstantBufferData, cbvH);
 	}
 
 	{
@@ -444,6 +528,11 @@ void MyEngine::OnUpdate(float dt)
 
 	memcpy(m_BasicPixelConstantBuffer.mapped, &m_BasicPixelConstantBufferData, sizeof(m_BasicPixelConstantBufferData));
 
+	m_skyboxVertexConstantBufferData = m_BasicVertexConstantBufferData;
+	m_skyboxVertexConstantBufferData.model = Matrix::CreateScale(20.0f).Transpose();
+	m_skyboxVertexConstantBufferData.invTranspose = Matrix();  // 스카이박스는 노멀 안 씀
+	memcpy(m_skyboxVertexConstantBuffer.mapped, &m_skyboxVertexConstantBufferData,
+		sizeof(m_skyboxVertexConstantBufferData));
 }
 
 void MyEngine::OnRender()
@@ -489,6 +578,10 @@ void MyEngine::PopulateCommandList()
 	gpuHandle.Offset(2, cbvDescriptorSize);
 	m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
 
+	CD3DX12_GPU_DESCRIPTOR_HANDLE heapStart1(m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+	m_commandList->SetGraphicsRootDescriptorTable(3,
+		CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart1, kCubeMapSrvIndex, cbvDescriptorSize));
+
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
@@ -507,8 +600,21 @@ void MyEngine::PopulateCommandList()
 	m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 	
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
 	CD3DX12_GPU_DESCRIPTOR_HANDLE heapStart(m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
+	
+	// ── 스카이박스 ──
+	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
+	m_commandList->SetGraphicsRootDescriptorTable(0,
+		CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, kSkyboxCbvStart, cbvDescriptorSize));
+	m_commandList->SetGraphicsRootDescriptorTable(2,
+		CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, kCubeMapSrvIndex, cbvDescriptorSize));
+	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBuffer.view);
+	m_commandList->IASetIndexBuffer(&m_indexBuffer.view);
+	m_commandList->DrawIndexedInstanced(m_indexBuffer.count, 1, 0, 0, 0);
+	
+	// ── 모델 ──
+	m_commandList->SetPipelineState(m_pipelineState.Get());
+	m_commandList->SetGraphicsRootDescriptorTable(0, heapStart);   // 원래 VS 상수 버퍼(0,1번 칸)로 복귀
 	for (const Mesh& mesh : m_meshes) {
 		m_commandList->SetGraphicsRootDescriptorTable(2,
 			CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, mesh.srvIndex, cbvDescriptorSize));

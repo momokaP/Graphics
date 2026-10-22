@@ -6,6 +6,7 @@
 
 #include <directxtk12/ResourceUploadBatch.h>
 #include <directxtk12/WICTextureLoader.h>
+#include <directxtk12/DDSTextureLoader.h>
 
 #include "Vertex.h"
 
@@ -106,6 +107,7 @@ private:
 	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
 	ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
+	ComPtr<ID3D12PipelineState> m_cubeMapPipelineState;
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
 	UINT m_rtvDescriptorSize;
 
@@ -158,10 +160,18 @@ private:
 	ComPtr<ID3D12Fence> m_fence;
 	UINT64 m_fenceValue;
 
-	UINT m_imguiSrvNext = 4;
+	UINT m_imguiSrvNext = 7;
 
 	void LoadPipeline();
 	void LoadAssets();
 	void PopulateCommandList();
 	void WaitForPreviousFrame();
+
+	ComPtr<ID3D12Resource> m_cubeMapTexture;
+	static constexpr UINT kCubeMapSrvIndex = 4;
+
+	static constexpr UINT kSkyboxCbvStart = 5;   // 5: b0, 6: b1
+	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // 같은 구조체 타입
+	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer 반환 타입
+
 };

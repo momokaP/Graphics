@@ -136,7 +136,10 @@ struct PSInput
 };
 
 Texture2D g_texture0 : register(t0);
+TextureCube g_textureCube0 : register(t1);
+
 SamplerState g_sampler : register(s0);
+SamplerState g_linearSampler : register(s1);
 
 float4 main(PSInput input) : SV_TARGET
 {   
@@ -177,5 +180,7 @@ float4 main(PSInput input) : SV_TARGET
     
     color += rim * rimColor * rimStrength;
 
-    return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
+    return g_textureCube0.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
+    
+    //return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
 }
