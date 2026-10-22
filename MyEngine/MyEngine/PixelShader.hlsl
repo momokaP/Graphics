@@ -120,6 +120,10 @@ cbuffer BasicPixelConstantBuffer : register(b0)
     bool useTexture;
     Material material;
     Light light[MAX_LIGHTS];
+    float3 rimColor;
+    float rimPower;
+    float rimStrength;
+    bool useSmoothstep;
 };
 
 struct PSInput
@@ -164,6 +168,14 @@ float4 main(PSInput input) : SV_TARGET
     }
     
     //return float4(color, 1.0);
-    return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
+    float rim = (1.0 - dot(input.normalWorld, toEye));
+    
+    if (useSmoothstep)
+        rim = smoothstep(0.0, 1.0, rim);
+    
+    rim = pow(abs(rim), rimPower);
+    
+    color += rim * rimColor * rimStrength;
 
+    return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
 }

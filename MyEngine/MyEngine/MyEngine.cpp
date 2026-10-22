@@ -277,8 +277,11 @@ void MyEngine::LoadAssets()
 
 	// Create the texture.
 	{
-		const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/zaku2/";
-		std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "zaku2.fbx");
+		// const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/zaku2/";
+		// std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "zaku2_1.fbx");
+
+		const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/sinanju/";
+		std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "sinanju.gltf");
 
 		DirectX::ResourceUploadBatch upload(m_device.Get());
 		upload.Begin();
@@ -542,6 +545,16 @@ void MyEngine::WaitForPreviousFrame()
 
 void MyEngine::UpdateGUI() 
 {
+	ImGui::SliderFloat("Rim Strength",
+		&m_BasicPixelConstantBufferData.rimStrength, 0.0f,
+		10.0f);
+	ImGui::Checkbox("Use Smoothstep",
+		&m_BasicPixelConstantBufferData.useSmoothstep);
+	ImGui::SliderFloat3("Rim Color", &m_BasicPixelConstantBufferData.rimColor.x,
+		0.0f, 1.0f);
+	ImGui::SliderFloat("Rim Power", &m_BasicPixelConstantBufferData.rimPower,
+		0.01f, 10.0f);
+
 	ImGui::Checkbox("Use Texture", &m_BasicPixelConstantBufferData.useTexture);
 	ImGui::SliderFloat3("m_modelTranslation", &m_modelTranslation.x, -2.0f,
 		2.0f);

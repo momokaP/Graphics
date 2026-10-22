@@ -53,7 +53,7 @@ private:
 
 	// ÀçÁú
 	struct Material {
-		Vector3 ambient = Vector3(0.1f);  // 12
+		Vector3 ambient = Vector3(0.0f);  // 12
 		float shininess = 1.0f;           // 4
 		Vector3 diffuse = Vector3(0.5f);  // 12
 		float dummy1;                     // 4
@@ -77,7 +77,11 @@ private:
 		bool useTexture;          // 4
 		Material material;        // 48
 		Light lights[MAX_LIGHTS]; // 48 * MAX_LIGHTS
-		float padding[12];
+		Vector3 rimColor = Vector3(1.0f);
+		float rimPower;
+		float rimStrength = 0.0f;
+		bool useSmoothstep = false;
+		float padding[6];
 	};
 	static_assert((sizeof(BasicPixelConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
