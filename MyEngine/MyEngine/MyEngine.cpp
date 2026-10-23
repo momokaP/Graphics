@@ -106,7 +106,7 @@ void MyEngine::LoadPipeline()
 
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-		rtvHeapDesc.NumDescriptors = FrameCount;
+		rtvHeapDesc.NumDescriptors = FrameCount + 3;
 		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 		rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
@@ -140,6 +140,40 @@ void MyEngine::LoadPipeline()
 	}
 
 	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)));
+}
+
+static const float kSceneClear[4] = { 0.2f, 0.2f, 0.25f, 1.0f };
+
+void MyEngine::CreateRenderTexture(ComPtr<ID3D12Resource>& tex, UINT w, UINT h,
+	UINT rtvIndex, UINT srvIndex)
+{
+	D3D12_CLEAR_VALUE clear = {};
+	clear.Format = kHdrFormat;
+	memcpy(clear.Color, kSceneClear, sizeof(kSceneClear));
+
+	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(kHdrFormat, w, h, 1, 1, 1, 0,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+
+	ThrowIfFailed(m_device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,   // 평소 상태는 SRV, 그릴 때만 RT로 전환
+		&clear, IID_PPV_ARGS(tex.ReleaseAndGetAddressOf())));
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(),
+		rtvIndex, m_rtvDescriptorSize);
+	m_device->CreateRenderTargetView(tex.Get(), nullptr, rtv);
+
+	CreateTextureSrv(tex.Get(), srvIndex);   // 기존 2D SRV 함수 재사용
+}
+
+void MyEngine::CreatePostTargets(UINT width, UINT height)
+{
+	CreateRenderTexture(m_sceneColor, width, height, kSceneRtv, kSceneSrv);
+
+	m_bloomWidth = max(1u, width / 2);
+	m_bloomHeight = max(1u, height / 2);
+	for (UINT i = 0; i < 2; ++i)
+		CreateRenderTexture(m_bloom[i], m_bloomWidth, m_bloomHeight, kBloomRtv + i, kBloomSrv + i);
 }
 
 void MyEngine::LoadAssets()
@@ -249,10 +283,72 @@ void MyEngine::LoadAssets()
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.RTVFormats[0] = kHdrFormat;
 		psoDesc.SampleDesc.Count = 1;
 
 		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+	}
+
+	// ── 후처리 루트 시그니처 ──
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 r[2];
+		r[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE); // t0
+		r[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE); // t1
+
+		CD3DX12_ROOT_PARAMETER1 p[3];
+		p[0].InitAsConstants(sizeof(PostConstants) / 4, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);   // b0
+		p[1].InitAsDescriptorTable(1, &r[0], D3D12_SHADER_VISIBILITY_PIXEL);
+		p[2].InitAsDescriptorTable(1, &r[1], D3D12_SHADER_VISIBILITY_PIXEL);
+
+		D3D12_STATIC_SAMPLER_DESC s = {};
+		s.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;   // 다운/업샘플에 bilinear가 필요
+		s.AddressU = s.AddressV = s.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		s.MaxLOD = D3D12_FLOAT32_MAX;
+		s.ShaderRegister = 0;
+		s.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rs;
+		rs.Init_1_1(_countof(p), p, 1, &s, D3D12_ROOT_SIGNATURE_FLAG_NONE);   // 입력 레이아웃 없음
+
+		ComPtr<ID3DBlob> sig, err;
+		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1_1, &sig, &err));
+		ThrowIfFailed(m_device->CreateRootSignature(0, sig->GetBufferPointer(), sig->GetBufferSize(),
+			IID_PPV_ARGS(&m_postRootSignature)));
+	}
+
+	// ── 후처리 PSO 3개 ──
+	{
+		UINT8* vs = nullptr; UINT vsLen = 0;
+		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"FullscreenVS.cso").c_str(), &vs, &vsLen));
+
+		auto makePostPSO = [&](const wchar_t* psFile, DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat,
+			ComPtr<ID3D12PipelineState>& out)
+			{
+				UINT8* ps = nullptr; UINT psLen = 0;
+				ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(psFile).c_str(), &ps, &psLen));
+
+				D3D12_GRAPHICS_PIPELINE_STATE_DESC d = {};
+				d.pRootSignature = m_postRootSignature.Get();
+				d.VS = CD3DX12_SHADER_BYTECODE(vs, vsLen);
+				d.PS = CD3DX12_SHADER_BYTECODE(ps, psLen);
+				d.InputLayout = { nullptr, 0 };
+				d.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+				d.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+				d.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+				d.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+				d.DepthStencilState.DepthEnable = FALSE;
+				d.DSVFormat = dsvFormat;
+				d.SampleMask = UINT_MAX;
+				d.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+				d.NumRenderTargets = 1;
+				d.RTVFormats[0] = rtvFormat;
+				d.SampleDesc.Count = 1;
+				ThrowIfFailed(m_device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&out)));
+			};
+
+		makePostPSO(L"BloomBrightPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, m_brightPSO);
+		makePostPSO(L"BloomBlurPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, m_blurPSO);
+		makePostPSO(L"BloomCombinePS.cso", DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, m_combinePSO);
 	}
 
 	{
@@ -284,7 +380,7 @@ void MyEngine::LoadAssets()
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.RTVFormats[0] = kHdrFormat;
 		psoDesc.SampleDesc.Count = 1;
 
 		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_cubeMapPipelineState)));
@@ -293,6 +389,8 @@ void MyEngine::LoadAssets()
 	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
 	ThrowIfFailed(m_commandList->Close());
+
+	CreatePostTargets(m_width, m_height);
 
 	{
 		MeshData meshData = GeometryGenerator::MakeBox();
@@ -609,17 +707,24 @@ void MyEngine::PopulateCommandList()
 	
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-	auto toRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
+	/*auto toRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
 		m_renderTargets[m_frameIndex].Get(),
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_commandList->ResourceBarrier(1, &toRenderTarget);
- 	
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
-	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
-	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+	m_commandList->ResourceBarrier(1, &toRenderTarget);*/
 
-	const float clearColor[] = { 0.2f, 0.2f, 0.25f, 1.0f };
-	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	/*auto toRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
+		m_renderTargets[m_frameIndex].Get(),
+		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList->ResourceBarrier(1, &toRenderTarget);*/
+ 	
+	auto sceneToRT = CD3DX12_RESOURCE_BARRIER::Transition(m_sceneColor.Get(),
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList->ResourceBarrier(1, &sceneToRT);
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE sceneRtv(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), kSceneRtv, m_rtvDescriptorSize);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
+	m_commandList->OMSetRenderTargets(1, &sceneRtv, FALSE, &dsvHandle);
+	m_commandList->ClearRenderTargetView(sceneRtv, kSceneClear, 0, nullptr);
 	m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 	
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -645,6 +750,81 @@ void MyEngine::PopulateCommandList()
 		m_commandList->IASetIndexBuffer(&mesh.ib.view);
 		m_commandList->DrawIndexedInstanced(mesh.ib.count, 1, 0, 0, 0);
 	}
+
+	// 씬 텍스처: RT → SRV
+	auto sceneToSRV = CD3DX12_RESOURCE_BARRIER::Transition(m_sceneColor.Get(),
+		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	m_commandList->ResourceBarrier(1, &sceneToSRV);
+
+	// ── 후처리 공통 설정 ──
+	m_commandList->SetGraphicsRootSignature(m_postRootSignature.Get());   // ⚠ 이전 루트 파라미터는 모두 무효
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	CD3DX12_VIEWPORT bloomVp(0.0f, 0.0f, float(m_bloomWidth), float(m_bloomHeight));
+	CD3DX12_RECT bloomRect(0, 0, LONG(m_bloomWidth), LONG(m_bloomHeight));
+	m_commandList->RSSetViewports(1, &bloomVp);
+	m_commandList->RSSetScissorRects(1, &bloomRect);
+
+	// 블룸 패스 하나: target에 src를 읽어서 그림
+	auto bloomPass = [&](ID3D12PipelineState* pso, UINT targetIdx, UINT srcSrv, const PostConstants& c)
+		{
+			ID3D12Resource* target = m_bloom[targetIdx].Get();
+			auto toRT = CD3DX12_RESOURCE_BARRIER::Transition(target,
+				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			m_commandList->ResourceBarrier(1, &toRT);
+
+			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(),
+				kBloomRtv + targetIdx, m_rtvDescriptorSize);
+			m_commandList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);   // 절반 해상도라 DSV 없음
+
+			m_commandList->SetPipelineState(pso);
+			m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &c, 0);
+			m_commandList->SetGraphicsRootDescriptorTable(1,
+				CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, srcSrv, cbvDescriptorSize));
+			m_commandList->DrawInstanced(3, 1, 0, 0);   // 화면 전체를 덮으므로 Clear 불필요
+
+			auto toSRV = CD3DX12_RESOURCE_BARRIER::Transition(target,
+				D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			m_commandList->ResourceBarrier(1, &toSRV);
+		};
+
+	PostConstants pc = {};
+	pc.invSize[0] = 1.0f / m_bloomWidth;
+	pc.invSize[1] = 1.0f / m_bloomHeight;
+	pc.threshold = m_bloomThreshold;
+	pc.strength = m_bloomStrength;
+
+	// 1) Bright: scene → bloom[0]
+	bloomPass(m_brightPSO.Get(), 0, kSceneSrv, pc);
+
+	// 2) Blur: bloom[0] → bloom[1] (X), bloom[1] → bloom[0] (Y)
+	for (int i = 0; i < m_bloomBlurCount; ++i)
+	{
+		pc.direction[0] = 1.0f; pc.direction[1] = 0.0f;
+		bloomPass(m_blurPSO.Get(), 1, kBloomSrv + 0, pc);
+		pc.direction[0] = 0.0f; pc.direction[1] = 1.0f;
+		bloomPass(m_blurPSO.Get(), 0, kBloomSrv + 1, pc);
+	}
+
+	// 3) Combine: scene + bloom[0] → 백버퍼
+	auto bbToRT = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(),
+		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList->ResourceBarrier(1, &bbToRT);
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE bbRtv(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
+	m_commandList->OMSetRenderTargets(1, &bbRtv, FALSE, &dsvHandle);   // ImGui PSO의 DSV 포맷과 맞춤
+	m_commandList->ClearRenderTargetView(bbRtv, kSceneClear, 0, nullptr);   // GUI 영역 배경
+
+	m_commandList->RSSetViewports(1, &m_viewport);
+	m_commandList->RSSetScissorRects(1, &m_scissorRect);
+
+	pc.invSize[0] = 1.0f / m_width;
+	pc.invSize[1] = 1.0f / m_height;
+	m_commandList->SetPipelineState(m_combinePSO.Get());
+	m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &pc, 0);
+	m_commandList->SetGraphicsRootDescriptorTable(1, CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, kSceneSrv, cbvDescriptorSize));     // t0
+	m_commandList->SetGraphicsRootDescriptorTable(2, CD3DX12_GPU_DESCRIPTOR_HANDLE(heapStart, kBloomSrv, cbvDescriptorSize));     // t1
+	m_commandList->DrawInstanced(3, 1, 0, 0);
 
 	// ImGui: 박스 다음, Present 배리어 전
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
@@ -689,6 +869,10 @@ void MyEngine::CreateCubeSrv(ID3D12Resource* tex, UINT heapIndex)
 
 void MyEngine::UpdateGUI() 
 {
+	ImGui::SliderFloat("Bloom Threshold", &m_bloomThreshold, 0.0f, 3.0f);
+	ImGui::SliderFloat("Bloom Strength", &m_bloomStrength, 0.0f, 3.0f);
+	ImGui::SliderInt("Bloom Blur Count", &m_bloomBlurCount, 0, 8);
+
 	ImGui::SliderFloat("Rim Strength",
 		&m_BasicPixelConstantBufferData.rimStrength, 0.0f,
 		10.0f);
@@ -706,6 +890,9 @@ void MyEngine::UpdateGUI()
 	ImGui::SliderFloat3("m_modelScaling", &m_modelScaling.x, 0.1f, 2.0f);
 	ImGui::SliderFloat("m_viewRot", &m_viewRot, -3.14f, 3.14f);
 
+	ImGui::SliderFloat3("Material FresnelR0",
+		&m_BasicPixelConstantBufferData.material.fresnelR0.x,
+		0.0f, 1.0f);
 	ImGui::SliderFloat("Material Shininess",
 		&m_BasicPixelConstantBufferData.material.shininess, 1.0f,
 		256.0f);
@@ -782,6 +969,10 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 	// 깊이 버퍼를 붙였다면 여기서 재생성
 	m_depthStencil.Reset();
 	CreateDepthBuffer(width, height);
+
+	m_depthStencil.Reset();
+	CreateDepthBuffer(width, height);
+	CreatePostTargets(width, height);   // 추가
 }
 
 void MyEngine::CreateDepthBuffer(UINT width, UINT height)

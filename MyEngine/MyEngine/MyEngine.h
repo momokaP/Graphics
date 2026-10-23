@@ -60,6 +60,8 @@ private:
 		float dummy1;                     // 4
 		Vector3 specular = Vector3(0.5f); // 12
 		float dummy2;                     // 4
+		Vector3 fresnelR0 = Vector3(1.0f, 0.71f, 0.29f); // Gold
+		float dummy3;
 	};
 
 	// 조명
@@ -82,7 +84,7 @@ private:
 		float rimPower;
 		float rimStrength = 0.0f;
 		bool useSmoothstep = false;
-		float padding[6];
+		float padding[2];
 	};
 	static_assert((sizeof(BasicPixelConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -181,4 +183,34 @@ private:
 	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer 반환 타입
 
 	void CreateCubeSrv(ID3D12Resource* tex, UINT heapIndex);
+
+	static constexpr DXGI_FORMAT kHdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+	// RTV 힙: 0,1 = 백버퍼 / 2 = 씬 / 3,4 = 블룸
+	static constexpr UINT kSceneRtv = FrameCount;        // 2
+	static constexpr UINT kBloomRtv = FrameCount + 1;    // 3, 4
+	// CBV/SRV 힙: 뒤쪽 칸을 후처리 전용으로 사용 (모델 16~과 떨어뜨림)
+	static constexpr UINT kSceneSrv = 100;
+	static constexpr UINT kBloomSrv = 101;               // 101, 102
+
+	ComPtr<ID3D12Resource> m_sceneColor;
+	ComPtr<ID3D12Resource> m_bloom[2];
+	UINT m_bloomWidth = 1, m_bloomHeight = 1;
+
+	ComPtr<ID3D12RootSignature> m_postRootSignature;
+	ComPtr<ID3D12PipelineState> m_brightPSO, m_blurPSO, m_combinePSO;
+
+	struct PostConstants {          // 루트 상수 8개 (b0)
+		float invSize[2];           // 그리는 대상의 1/해상도
+		float direction[2];         // 블러 방향
+		float threshold;
+		float strength;
+		float pad[2];
+	};
+	float m_bloomThreshold = 0.8f;
+	float m_bloomStrength = 0.5f;
+	int   m_bloomBlurCount = 2;
+
+	void CreateRenderTexture(ComPtr<ID3D12Resource>& tex, UINT w, UINT h, UINT rtvIndex, UINT srvIndex);
+	void CreatePostTargets(UINT width, UINT height);
 };

@@ -12,6 +12,8 @@ struct Material
     float dummy1; // 16 bytes 맞춰주기 위해 추가
     float3 specular;
     float dummy2;
+    float3 fresnelR0;
+    float dummy3;
 };
 
 // 조명
@@ -148,6 +150,31 @@ float3 ACESFilm(float3 x)   // 근사 ACES 톤매핑
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
+// Schlick approximation: Eq. 9.17 in "Real-Time Rendering 4th Ed."
+// fresnelR0는 물질의 고유 성질
+// Water : (0.02, 0.02, 0.02)
+// Glass : (0.08, 0.08, 0.08)
+// Plastic : (0.05, 0.05, 0.05)
+// Gold: (1.0, 0.71, 0.29)
+// Silver: (0.95, 0.93, 0.88)
+// Copper: (0.95, 0.64, 0.54)
+float3 SchlickFresnel(float3 fresnelR0, float3 normal, float3 toEye)
+{
+    // 참고 자료들
+    // THE SCHLICK FRESNEL APPROXIMATION by Zander Majercik, NVIDIA
+    // http://psgraphics.blogspot.com/2020/03/fresnel-equations-schlick-approximation.html
+    
+    float normalDotView = saturate(dot(normal, toEye));
+
+    float f0 = 1.0f - normalDotView; // 90도이면 f0 = 1, 0도이면 f0 = 0
+
+    // 1.0 보다 작은 값은 여러 번 곱하면 더 작은 값이 됩니다.
+    // 0도 -> f0 = 0 -> fresnelR0 반환
+    // 90도 -> f0 = 1.0 -> float3(1.0) 반환
+    // 0도에 가까운 가장자리는 Specular 색상, 90도에 가까운 안쪽은 고유 색상(fresnelR0)
+    return fresnelR0 + (1.0f - fresnelR0) * pow(f0, 5.0);
+}
+
 float4 main(PSInput input) : SV_TARGET
 {   
     float3 toEye = normalize(eyeWorld - input.posWorld);
@@ -203,6 +230,10 @@ float4 main(PSInput input) : SV_TARGET
     
         diffuse.xyz *= material.diffuse;
         specular.xyz *= material.specular;
+        
+        // 참고: https://www.shadertoy.com/view/lscBW4
+        float3 f = SchlickFresnel(material.fresnelR0, input.normalWorld, toEye);
+        specular.xyz *= f;
     
         if (useTexture)
         {
