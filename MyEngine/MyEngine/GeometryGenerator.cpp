@@ -192,6 +192,8 @@ MeshData GeometryGenerator::MakeCylinder(const float bottomRadius,
     const float topRadius, float height,
     int numSlices) {
 
+    using namespace DirectX;
+
     // Texture 좌표계때문에 (numSlices + 1) x 2 개의 버텍스 사용
 
     const float dTheta = -XM_2PI / float(numSlices);
@@ -246,6 +248,8 @@ MeshData GeometryGenerator::MakeCylinder(const float bottomRadius,
 
 MeshData GeometryGenerator::MakeSphere(const float radius, const int numSlices,
     const int numStacks) {
+
+    using namespace DirectX;
 
     // 참고: OpenGL Sphere
     // http://www.songho.ca/opengl/gl_sphere.html

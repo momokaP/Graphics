@@ -119,13 +119,13 @@ float3 ComputeSpotLight(Light L, Material mat, float3 pos, float3 normal,
 cbuffer BasicPixelConstantBuffer : register(b0)
 {
     float3 eyeWorld;
-    bool useTexture;
+    uint useTexture;
     Material material;
     Light light[MAX_LIGHTS];
     float3 rimColor;
     float rimPower;
     float rimStrength;
-    bool useSmoothstep;
+    uint useSmoothstep;
 };
 
 struct PSInput
@@ -217,30 +217,46 @@ float4 main(PSInput input) : SV_TARGET
     // return g_textureCube0.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
     
     {
-        float4 diffuse = g_textureCubeDiffuse.Sample(g_sampler, input.normalWorld);
-        float4 specular = g_textureCube.Sample(g_sampler, reflect(-toEye, input.normalWorld));
+        float3 N = input.normalWorld;
+        float3 R = reflect(-toEye, N);
+
+        // Blinn-Phong 광택 → 거칠기 근사 (shininess 1 → 거침, 256 → 매끈)
+        float roughness = sqrt(2.0 / (material.shininess + 2.0));
+
+        uint w, h, mipCount;
+        g_textureCubeSpecular.GetDimensions(0, w, h, mipCount);
+        float lod = roughness * (mipCount - 1);
+
+        float3 irradiance = g_textureCubeDiffuse.Sample(g_linearSampler, N).rgb;
+        float3 prefiltered = g_textureCubeSpecular.SampleLevel(g_linearSampler, R, lod).rgb;
+
+        float3 albedo = useTexture ? g_texture0.Sample(g_linearSampler, input.texcoord).rgb
+                               : float3(1.0, 1.0, 1.0);
+        float3 F = SchlickFresnel(material.fresnelR0, N, toEye);
+
+        float3 diffuse = irradiance * material.diffuse * albedo;
+        float3 specular = prefiltered * material.specular * F;
+
+        return float4(diffuse + specular, 1.0); // 모든 항이 환경 밝기에 선형 → 노출이 그대로 반영됨
+    }
     
-        const float exposure = 1.0; // 밝기 조절 (1~3 정도로 바꿔 보기)
-        diffuse = float4(ACESFilm(diffuse.xyz * exposure), 1.0);
-        diffuse.xyz = pow(diffuse.xyz, 1.0 / 2.2);
-        specular = float4(ACESFilm(specular.xyz * exposure), 1.0);
-        specular.xyz = pow(specular.xyz, 1.0 / 2.2);
-        
-        specular *= pow((specular.x + specular.y + specular.z) / 3.0, material.shininess);
-    
-        diffuse.xyz *= material.diffuse;
-        specular.xyz *= material.specular;
-        
-        // 참고: https://www.shadertoy.com/view/lscBW4
-        float3 f = SchlickFresnel(material.fresnelR0, input.normalWorld, toEye);
-        specular.xyz *= f;
-    
-        if (useTexture)
-        {
-            diffuse *= g_texture0.Sample(g_sampler, input.texcoord);
-        }
-    
-        return diffuse + specular;
+    {
+        //float3 diffuse = g_textureCubeDiffuse.Sample(g_sampler, input.normalWorld).rgb;
+        //float3 specular = g_textureCube.Sample(g_sampler, reflect(-toEye, input.normalWorld)).rgb;
+
+        //float avg = (specular.x + specular.y + specular.z) / 3.0;
+        //specular *= pow(saturate(avg), material.shininess);
+
+        //diffuse *= material.diffuse;
+        //specular *= material.specular;
+
+        //float3 f = SchlickFresnel(material.fresnelR0, input.normalWorld, toEye);
+        //specular *= f;
+
+        //if (useTexture)
+        //    diffuse *= g_texture0.Sample(g_sampler, input.texcoord).rgb;
+
+        //return float4(diffuse + specular, 1.0);
     }
     
     {

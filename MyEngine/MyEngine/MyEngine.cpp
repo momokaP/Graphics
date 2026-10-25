@@ -432,8 +432,10 @@ void MyEngine::LoadAssets()
 		upload.Begin();
 
 		// 기본 텍스처 (3번 칸) — 기존 코드 그대로
-		ThrowIfFailed(DirectX::CreateWICTextureFromFile(m_device.Get(), upload,
-			Paths::Asset(L"Textures/kotone.png").c_str(), m_texture.ReleaseAndGetAddressOf()));
+		ThrowIfFailed(DirectX::CreateWICTextureFromFileEx(m_device.Get(), upload,
+			Paths::Asset(L"Textures/kotone.png").c_str(),
+			0, D3D12_RESOURCE_FLAG_NONE, DirectX::WIC_LOADER_FORCE_SRGB,
+			m_texture.ReleaseAndGetAddressOf()));
 
 		UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		UINT nextSrv = kModelSrvStart;
@@ -444,8 +446,10 @@ void MyEngine::LoadAssets()
 			mesh.ib = CreateIndexBuffer(m_device.Get(), md.indices);
 
 			if (!md.albedoTexturePath.empty() && std::filesystem::exists(md.albedoTexturePath)) {
-				if (SUCCEEDED(DirectX::CreateWICTextureFromFile(m_device.Get(), upload,
-					md.albedoTexturePath.c_str(), mesh.texture.ReleaseAndGetAddressOf()))) {
+				if (SUCCEEDED(DirectX::CreateWICTextureFromFileEx(m_device.Get(), upload,
+					md.albedoTexturePath.c_str(),
+					0, D3D12_RESOURCE_FLAG_NONE, DirectX::WIC_LOADER_FORCE_SRGB,
+					mesh.texture.ReleaseAndGetAddressOf()))) {
 					mesh.srvIndex = nextSrv++;
 				}
 			}
@@ -782,6 +786,7 @@ void MyEngine::PopulateCommandList()
 	pc.invSize[1] = 1.0f / m_bloomHeight;
 	pc.threshold = m_bloomThreshold;
 	pc.strength = m_bloomStrength;
+	pc.exposure = m_exposure;
 
 	// 1) Bright: scene → bloom[0]
 	bloomPass(m_brightPSO.Get(), 0, kSceneSrv, pc);
@@ -858,6 +863,7 @@ void MyEngine::CreateCubeSrv(ID3D12Resource* tex, UINT heapIndex)
 
 void MyEngine::UpdateGUI() 
 {
+	ImGui::SliderFloat("Exposure", &m_exposure, 0.1f, 5.0f);
 	ImGui::SliderFloat("Bloom Threshold", &m_bloomThreshold, 0.0f, 3.0f);
 	ImGui::SliderFloat("Bloom Strength", &m_bloomStrength, 0.0f, 3.0f);
 	ImGui::SliderInt("Bloom Blur Count", &m_bloomBlurCount, 0, 8);
@@ -865,14 +871,17 @@ void MyEngine::UpdateGUI()
 	ImGui::SliderFloat("Rim Strength",
 		&m_BasicPixelConstantBufferData.rimStrength, 0.0f,
 		10.0f);
-	ImGui::Checkbox("Use Smoothstep",
-		&m_BasicPixelConstantBufferData.useSmoothstep);
+	bool useSmoothstep = m_BasicPixelConstantBufferData.useSmoothstep != 0;
+	if (ImGui::Checkbox("Use Smoothstep", &useSmoothstep))
+		m_BasicPixelConstantBufferData.useSmoothstep = useSmoothstep ? 1u : 0u;
 	ImGui::SliderFloat3("Rim Color", &m_BasicPixelConstantBufferData.rimColor.x,
 		0.0f, 1.0f);
 	ImGui::SliderFloat("Rim Power", &m_BasicPixelConstantBufferData.rimPower,
 		0.01f, 10.0f);
 
-	ImGui::Checkbox("Use Texture", &m_BasicPixelConstantBufferData.useTexture);
+	bool useTexture = m_BasicPixelConstantBufferData.useTexture != 0;
+	if (ImGui::Checkbox("Use Texture", &useTexture))
+		m_BasicPixelConstantBufferData.useTexture = useTexture ? 1u : 0u;
 	ImGui::SliderFloat3("m_modelTranslation", &m_modelTranslation.x, -2.0f,
 		2.0f);
 	ImGui::SliderFloat3("m_modelRotation", &m_modelRotation.x, -3.14f, 3.14f);

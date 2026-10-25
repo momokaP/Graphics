@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "DXSample.h"
 #include "GeometryGenerator.h"
 
@@ -77,14 +76,14 @@ private:
 
 #define MAX_LIGHTS 3
 	struct BasicPixelConstantBuffer {
-		Vector3 eyeWorld;         // 12
-		bool useTexture;          // 4
-		Material material;        // 48
+		Vector3 eyeWorld;         
+		uint32_t useTexture;      
+		Material material;        
 		Light lights[MAX_LIGHTS]; // 48 * MAX_LIGHTS
 		Vector3 rimColor = Vector3(1.0f);
 		float rimPower;
 		float rimStrength = 0.0f;
-		bool useSmoothstep = false;
+		uint32_t useSmoothstep = false;
 		float padding[2];
 	};
 	static_assert((sizeof(BasicPixelConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
@@ -206,10 +205,13 @@ private:
 		float direction[2];         // 블러 방향
 		float threshold;
 		float strength;
-		float pad[2];
+		float exposure;             
+		float pad;
 	};
-	float m_bloomThreshold = 0.8f;
-	float m_bloomStrength = 0.5f;
+	float m_bloomThreshold = 1.0f;
+	float m_bloomStrength = 0.1f;
+	float m_exposure = 1.0f;
+
 	int   m_bloomBlurCount = 2;
 
 	void CreateRenderTexture(ComPtr<ID3D12Resource>& tex, UINT w, UINT h, UINT rtvIndex, UINT srvIndex);

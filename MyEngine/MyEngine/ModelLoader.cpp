@@ -2,6 +2,11 @@
 
 #include <filesystem>
 
+using DirectX::SimpleMath::Matrix;
+using DirectX::SimpleMath::Vector2;
+using DirectX::SimpleMath::Vector3;
+using DirectX::SimpleMath::Vector4;
+
 std::vector<MeshData> ModelLoader::Load(const std::filesystem::path& file)
 {
     m_baseDir = file.parent_path();
@@ -59,7 +64,7 @@ MeshData ModelLoader::ProcessMesh(aiMesh* mesh, const aiScene* scene, const Matr
             out.indices.push_back(face.mIndices[j]);
     }
 
-    if (mesh->mMaterialIndex >= 0) {
+    if (mesh->mMaterialIndex < scene->mNumMaterials) {
         aiMaterial* mat = scene->mMaterials[mesh->mMaterialIndex];
         aiString path;
         if (mat->GetTexture(aiTextureType_DIFFUSE, 0, &path) == AI_SUCCESS)

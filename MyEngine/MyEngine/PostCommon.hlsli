@@ -1,10 +1,16 @@
 cbuffer PostConstants : register(b0)
 {
-    float2 invSize; // 지금 그리는 대상의 1/해상도
-    float2 direction; // 블러 방향 (1,0) / (0,1)
+    float2 invSize;
+    float2 direction;
     float threshold;
     float strength;
-    float2 _pad;
+    float exposure;
+    float _pad;
 };
 
 SamplerState g_linear : register(s0);
+
+float3 ACESFilm(float3 x)   // 근사 ACES 톤매핑 (Narkowicz)
+{
+    return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
+}

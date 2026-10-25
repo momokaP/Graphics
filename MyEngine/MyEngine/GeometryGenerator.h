@@ -7,7 +7,6 @@
 #include "MeshData.h"
 #include "ModelLoader.h"
 
-using namespace DirectX;
 using DirectX::SimpleMath::Matrix;
 using DirectX::SimpleMath::Vector2;
 using DirectX::SimpleMath::Vector3;

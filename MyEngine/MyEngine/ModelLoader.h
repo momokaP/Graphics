@@ -11,14 +11,12 @@
 #include "Vertex.h"
 #include "Paths.h"
 
-using DirectX::SimpleMath::Matrix;
-
 class ModelLoader {
 public:
     std::vector<MeshData> Load(const std::filesystem::path& file);
 private:
-    void ProcessNode(aiNode* node, const aiScene* scene, const Matrix& parentTransform);
-    MeshData ProcessMesh(aiMesh* mesh, const aiScene* scene, const Matrix& transform);
+    void ProcessNode(aiNode* node, const aiScene* scene, const DirectX::SimpleMath::Matrix& parentTransform);
+    MeshData ProcessMesh(aiMesh* mesh, const aiScene* scene, const DirectX::SimpleMath::Matrix& transform);
 
 public:
     std::filesystem::path m_baseDir;
