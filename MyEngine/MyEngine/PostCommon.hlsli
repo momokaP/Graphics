@@ -1,7 +1,7 @@
 cbuffer PostConstants : register(b0)
 {
-    float2 invSize; // Áö±İ ±×¸®´Â ´ë»óÀÇ 1/ÇØ»óµµ
-    float2 direction; // ºí·¯ ¹æÇâ (1,0) / (0,1)
+    float2 invSize; // ì§€ê¸ˆ ê·¸ë¦¬ëŠ” ëŒ€ìƒì˜ 1/í•´ìƒë„
+    float2 direction; // ë¸”ëŸ¬ ë°©í–¥ (1,0) / (0,1)
     float threshold;
     float strength;
     float2 _pad;

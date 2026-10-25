@@ -1,6 +1,9 @@
 #pragma once
 #include <stdexcept>
 
+#include <vector>
+#include <fstream>
+
 // Note that while ComPtr is used to manage the lifetime of resources on the CPU,
 // it has no understanding of the lifetime of resources on the GPU. Apps must account
 // for the GPU lifetime of resources to avoid destroying objects that may still be
@@ -96,6 +99,25 @@ inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
 	}
 
 	return S_OK;
+}
+
+inline std::vector<uint8_t> LoadShader(const std::wstring& path)
+{
+	std::ifstream file(path, std::ios::binary | std::ios::ate);  // ate: 끝에서 열어서 크기 확인
+	if (!file)
+		throw std::runtime_error("Failed to open shader file");
+
+	const std::streamsize size = file.tellg();
+	std::vector<uint8_t> data(static_cast<size_t>(size));
+
+	file.seekg(0, std::ios::beg);
+	file.read(reinterpret_cast<char*>(data.data()), size);
+	return data;   // 이동(move)되므로 복사 비용 없음
+}
+
+inline D3D12_SHADER_BYTECODE ToBytecode(const std::vector<uint8_t>& code)
+{
+	return { code.data(), code.size() };
 }
 
 inline HRESULT ReadDataFromDDSFile(LPCWSTR filename, byte** data, UINT* offset, UINT* size)

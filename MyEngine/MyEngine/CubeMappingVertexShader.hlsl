@@ -1,17 +1,17 @@
 struct VertexShaderInput
 {
-    float3 posModel : POSITION; //¸ðµ¨ ÁÂÇ¥°èÀÇ À§Ä¡ position
-    float3 normalModel : NORMAL; // ¸ðµ¨ ÁÂÇ¥°èÀÇ normal    
-    float2 texcoord : TEXCOORD0; // <- ´ÙÀ½ ¿¹Á¦¿¡¼­ »ç¿ë
+    float3 posModel : POSITION; //ëª¨ë¸ ì¢Œí‘œê³„ì˜ ìœ„ì¹˜ position
+    float3 normalModel : NORMAL; // ëª¨ë¸ ì¢Œí‘œê³„ì˜ normal    
+    float2 texcoord : TEXCOORD0; // <- ë‹¤ìŒ ì˜ˆì œì—ì„œ ì‚¬ìš©
 };
 
 struct PixelShaderInput
 {
     float4 posProj : SV_POSITION; // Screen position
-    float3 posWorld : POSITION; // World position (Á¶¸í °è»ê¿¡ »ç¿ë)
+    float3 posWorld : POSITION; // World position (ì¡°ëª… ê³„ì‚°ì— ì‚¬ìš©)
     float3 normalWorld : NORMAL;
     float2 texcoord : TEXCOORD;
-    float3 color : COLOR; // Normal lines ½¦ÀÌ´õ¿¡¼­ »ç¿ë
+    float3 color : COLOR; // Normal lines ì‰ì´ë”ì—ì„œ ì‚¬ìš©
 };
 
 cbuffer BasicVertexConstantBuffer : register(b1)

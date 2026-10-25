@@ -6,6 +6,6 @@ float4 main(float4 pos : SV_POSITION) : SV_TARGET
 {
     float2 uv = pos.xy * invSize;
     float3 scene = g_scene.Sample(g_linear, uv).rgb;
-    float3 bloom = g_bloom.Sample(g_linear, uv).rgb; // Àı¹İ ÇØ»óµµ ¡æ bilinear ¾÷»ùÇÃ
-    return float4(scene + bloom * strength, 1.0); // UNORM ¹é¹öÆÛ¿¡¼­ 1 ÀÌ»óÀº Àß¸²
+    float3 bloom = g_bloom.Sample(g_linear, uv).rgb; // ì ˆë°˜ í•´ìƒë„ â†’ bilinear ì—…ìƒ˜í”Œ
+    return float4(scene + bloom * strength, 1.0); // UNORM ë°±ë²„í¼ì—ì„œ 1 ì´ìƒì€ ì˜ë¦¼
 }

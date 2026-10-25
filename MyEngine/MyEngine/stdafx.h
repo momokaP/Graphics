@@ -1,6 +1,6 @@
 // Standard Application Framework Extensions
-// AFX´Â MFC°¡ °³¹ßµÇ´ø ÃÊ±âÀÇ ³»ºÎ ÀÌ¸§
-// ¹Ì¸® ÄÄÆÄÀÏµÈ Çì´õ(Precompiled Header, PCH) ¿ë ÆÄÀÏ
+// AFXëŠ” MFCê°€ ê°œë°œë˜ë˜ ì´ˆê¸°ì˜ ë‚´ë¶€ ì´ë¦„
+// ë¯¸ë¦¬ ì»´íŒŒì¼ëœ í—¤ë”(Precompiled Header, PCH) ìš© íŒŒì¼
 
 // stdafx.h : include file for standard system include files,
 // or project specific include files that are used frequently, but
@@ -8,7 +8,7 @@
 
 #pragma once
 
-// windows.h°¡ Àß ¾È ¾²ÀÌ´Â Çì´õµéÀ» »©°í °¡º±°Ô includeµÇµµ·Ï ÇÏ´Â ¸ÅÅ©·Î
+// windows.hê°€ ì˜ ì•ˆ ì“°ì´ëŠ” í—¤ë”ë“¤ì„ ë¹¼ê³  ê°€ë³ê²Œ includeë˜ë„ë¡ í•˜ëŠ” ë§¤í¬ë¡œ
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif

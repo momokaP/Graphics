@@ -14,18 +14,18 @@ cbuffer BasicVertexConstantBuffer : register(b1)
 
 struct VSInput
 {
-    float3 posModel : POSITION; //¸ðµ¨ ÁÂÇ¥°èÀÇ À§Ä¡ position
-    float3 normalModel : NORMAL; // ¸ðµ¨ ÁÂÇ¥°èÀÇ normal    
-    float2 texcoord : TEXCOORD0; // <- ´ÙÀ½ ¿¹Á¦¿¡¼­ »ç¿ë
+    float3 posModel : POSITION; //ëª¨ë¸ ì¢Œí‘œê³„ì˜ ìœ„ì¹˜ position
+    float3 normalModel : NORMAL; // ëª¨ë¸ ì¢Œí‘œê³„ì˜ normal    
+    float2 texcoord : TEXCOORD0; // <- ë‹¤ìŒ ì˜ˆì œì—ì„œ ì‚¬ìš©
 };
 
 struct PSInput
 {
     float4 posProj : SV_POSITION; // Screen position
-    float3 posWorld : POSITION; // World position (Á¶¸í °è»ê¿¡ »ç¿ë)
+    float3 posWorld : POSITION; // World position (ì¡°ëª… ê³„ì‚°ì— ì‚¬ìš©)
     float3 normalWorld : NORMAL;
     float2 texcoord : TEXCOORD;
-    float3 color : COLOR; // Normal lines ½¦ÀÌ´õ¿¡¼­ »ç¿ë
+    float3 color : COLOR; // Normal lines ì‰ì´ë”ì—ì„œ ì‚¬ìš©
 };
 
 PSInput main(VSInput input)
@@ -34,7 +34,7 @@ PSInput main(VSInput input)
     float4 pos = float4(input.posModel, 1.0f);
     pos = mul(pos, model); 
     
-    output.posWorld = pos.xyz; // ¿ùµå À§Ä¡ µû·Î ÀúÀå
+    output.posWorld = pos.xyz; // ì›”ë“œ ìœ„ì¹˜ ë”°ë¡œ ì €ìž¥
 
     pos = mul(pos, view);
     pos = mul(pos, projection);

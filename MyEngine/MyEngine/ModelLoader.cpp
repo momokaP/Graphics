@@ -2,17 +2,17 @@
 
 #include <filesystem>
 
-std::vector<MeshData> ModelLoader::Load(const std::string& basePath, const std::string& fileName)
+std::vector<MeshData> ModelLoader::Load(const std::filesystem::path& file)
 {
-    m_basePath = basePath;
+    m_baseDir = file.parent_path();
     m_meshes.clear();
     
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(basePath + fileName,
-        aiProcess_Triangulate |            // »ç°¢Çü ÀÌ»ó ¡æ »ï°¢Çü
-        aiProcess_ConvertToLeftHanded |    // D3D ÁÂÇ¥°è + UV »óÇÏ + °¨±è ¼ø¼­
-        aiProcess_GenSmoothNormals |       // ³ë¸Ö ¾øÀ¸¸é »ý¼º
-        aiProcess_JoinIdenticalVertices);  // Áßº¹ Á¤Á¡ º´ÇÕ ¡æ ÀÎµ¦½º È°¿ë
+    const aiScene* scene = importer.ReadFile(Paths::ToUtf8(file),
+        aiProcess_Triangulate |            // ì‚¬ê°í˜• ì´ìƒ â†’ ì‚¼ê°í˜•
+        aiProcess_ConvertToLeftHanded |    // D3D ì¢Œí‘œê³„ + UV ìƒí•˜ + ê°ê¹€ ìˆœì„œ
+        aiProcess_GenSmoothNormals |       // ë…¸ë©€ ì—†ìœ¼ë©´ ìƒì„±
+        aiProcess_JoinIdenticalVertices);  // ì¤‘ë³µ ì •ì  ë³‘í•© â†’ ì¸ë±ìŠ¤ í™œìš©
 
     if (!scene || !scene->mRootNode || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE))
         throw std::runtime_error(importer.GetErrorString());
@@ -23,7 +23,7 @@ std::vector<MeshData> ModelLoader::Load(const std::string& basePath, const std::
 
 void ModelLoader::ProcessNode(aiNode* node, const aiScene* scene, const Matrix& parentTransform)
 {
-    // aiMatrix4x4´Â Çà ¿ì¼±(row-major) + ¿­º¤ÅÍ ±Ô¾à ¡æ SimpleMath¿ëÀ¸·Î ÀüÄ¡
+    // aiMatrix4x4ëŠ” í–‰ ìš°ì„ (row-major) + ì—´ë²¡í„° ê·œì•½ â†’ SimpleMathìš©ìœ¼ë¡œ ì „ì¹˜
     Matrix local(&node->mTransformation.a1);
     Matrix world = local.Transpose() * parentTransform;
 
@@ -63,7 +63,7 @@ MeshData ModelLoader::ProcessMesh(aiMesh* mesh, const aiScene* scene, const Matr
         aiMaterial* mat = scene->mMaterials[mesh->mMaterialIndex];
         aiString path;
         if (mat->GetTexture(aiTextureType_DIFFUSE, 0, &path) == AI_SUCCESS)
-            out.albedoTexturePath = m_basePath + std::filesystem::path(path.C_Str()).filename().string();
+            out.albedoTexturePath = m_baseDir / Paths::FromUtf8(path.C_Str()).filename();
     }
     return out;
 }

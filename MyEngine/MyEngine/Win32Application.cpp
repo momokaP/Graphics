@@ -63,10 +63,10 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdshow)
 			ImGui::SetWindowPos(ImVec2(0.0f, 0.0f));
 
 			ImGui::End();
-			ImGui::Render();    // µå·Î¿ì µ¥ÀÌÅÍ È®Á¤
+			ImGui::Render();    // ë“œë¡œìš° ë°ì´í„° í™•ì •
 
 			pSample->OnUpdate(ImGui::GetIO().DeltaTime);
-			pSample->OnRender(); // PopulateCommandList ¾È¿¡¼­ ImGui°¡ ÇÔ²² ±×·ÁÁü
+			pSample->OnRender(); // PopulateCommandList ì•ˆì—ì„œ ImGuiê°€ í•¨ê»˜ ê·¸ë ¤ì§
 
 		}
 	}

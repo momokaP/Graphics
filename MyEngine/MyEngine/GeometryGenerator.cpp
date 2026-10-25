@@ -6,11 +6,11 @@ MeshData GeometryGenerator::MakeSquare() {
     vector<Vector3> positions;
     vector<Vector3> colors;
     vector<Vector3> normals;
-    vector<Vector2> texcoords; // ÅØ½ºÃç ÁÂÇ¥
+    vector<Vector2> texcoords; // í…ìŠ¤ì¶° ì¢Œí‘œ
 
     const float scale = 1.0f;
 
-    // ¾Õ¸é
+    // ì•ë©´
     positions.push_back(Vector3(-1.0f, 1.0f, 0.0f) * scale);
     positions.push_back(Vector3(1.0f, 1.0f, 0.0f) * scale);
     positions.push_back(Vector3(1.0f, -1.0f, 0.0f) * scale);
@@ -44,7 +44,7 @@ MeshData GeometryGenerator::MakeSquare() {
         meshData.vertices.push_back(v);
     }
     meshData.indices = {
-        0, 1, 2, 0, 2, 3, // ¾Õ¸é
+        0, 1, 2, 0, 2, 3, // ì•ë©´
     };
 
     return meshData;
@@ -55,11 +55,11 @@ MeshData GeometryGenerator::MakeBox() {
     vector<Vector3> positions;
     vector<Vector3> colors;
     vector<Vector3> normals;
-    vector<Vector2> texcoords; // ÅØ½ºÃç ÁÂÇ¥
+    vector<Vector2> texcoords; // í…ìŠ¤ì¶° ì¢Œí‘œ
 
     const float scale = 1.0f;
 
-    // À­¸é
+    // ìœ—ë©´
     positions.push_back(Vector3(-1.0f, 1.0f, -1.0f) * scale);
     positions.push_back(Vector3(-1.0f, 1.0f, 1.0f) * scale);
     positions.push_back(Vector3(1.0f, 1.0f, 1.0f) * scale);
@@ -77,7 +77,7 @@ MeshData GeometryGenerator::MakeBox() {
     texcoords.push_back(Vector2(1.0f, 1.0f));
     texcoords.push_back(Vector2(0.0f, 1.0f));
 
-    // ¾Æ·§¸é
+    // ì•„ë«ë©´
     positions.push_back(Vector3(-1.0f, -1.0f, -1.0f) * scale);
     positions.push_back(Vector3(1.0f, -1.0f, -1.0f) * scale);
     positions.push_back(Vector3(1.0f, -1.0f, 1.0f) * scale);
@@ -95,7 +95,7 @@ MeshData GeometryGenerator::MakeBox() {
     texcoords.push_back(Vector2(1.0f, 1.0f));
     texcoords.push_back(Vector2(0.0f, 1.0f));
 
-    // ¾Õ¸é
+    // ì•ë©´
     positions.push_back(Vector3(-1.0f, -1.0f, -1.0f) * scale);
     positions.push_back(Vector3(-1.0f, 1.0f, -1.0f) * scale);
     positions.push_back(Vector3(1.0f, 1.0f, -1.0f) * scale);
@@ -113,7 +113,7 @@ MeshData GeometryGenerator::MakeBox() {
     texcoords.push_back(Vector2(1.0f, 1.0f));
     texcoords.push_back(Vector2(0.0f, 1.0f));
 
-    // µŞ¸é
+    // ë’·ë©´
     positions.push_back(Vector3(-1.0f, -1.0f, 1.0f) * scale);
     positions.push_back(Vector3(1.0f, -1.0f, 1.0f) * scale);
     positions.push_back(Vector3(1.0f, 1.0f, 1.0f) * scale);
@@ -131,7 +131,7 @@ MeshData GeometryGenerator::MakeBox() {
     texcoords.push_back(Vector2(1.0f, 1.0f));
     texcoords.push_back(Vector2(0.0f, 1.0f));
 
-    // ¿ŞÂÊ
+    // ì™¼ìª½
     positions.push_back(Vector3(-1.0f, -1.0f, 1.0f) * scale);
     positions.push_back(Vector3(-1.0f, 1.0f, 1.0f) * scale);
     positions.push_back(Vector3(-1.0f, 1.0f, -1.0f) * scale);
@@ -149,7 +149,7 @@ MeshData GeometryGenerator::MakeBox() {
     texcoords.push_back(Vector2(1.0f, 1.0f));
     texcoords.push_back(Vector2(0.0f, 1.0f));
 
-    // ¿À¸¥ÂÊ
+    // ì˜¤ë¥¸ìª½
     positions.push_back(Vector3(1.0f, -1.0f, 1.0f) * scale);
     positions.push_back(Vector3(1.0f, -1.0f, -1.0f) * scale);
     positions.push_back(Vector3(1.0f, 1.0f, -1.0f) * scale);
@@ -177,12 +177,12 @@ MeshData GeometryGenerator::MakeBox() {
     }
 
     meshData.indices = {
-        0,  1,  2,  0,  2,  3,  // À­¸é
-        4,  5,  6,  4,  6,  7,  // ¾Æ·§¸é
-        8,  9,  10, 8,  10, 11, // ¾Õ¸é
-        12, 13, 14, 12, 14, 15, // µŞ¸é
-        16, 17, 18, 16, 18, 19, // ¿ŞÂÊ
-        20, 21, 22, 20, 22, 23  // ¿À¸¥ÂÊ
+        0,  1,  2,  0,  2,  3,  // ìœ—ë©´
+        4,  5,  6,  4,  6,  7,  // ì•„ë«ë©´
+        8,  9,  10, 8,  10, 11, // ì•ë©´
+        12, 13, 14, 12, 14, 15, // ë’·ë©´
+        16, 17, 18, 16, 18, 19, // ì™¼ìª½
+        20, 21, 22, 20, 22, 23  // ì˜¤ë¥¸ìª½
     };
 
     return meshData;
@@ -192,7 +192,7 @@ MeshData GeometryGenerator::MakeCylinder(const float bottomRadius,
     const float topRadius, float height,
     int numSlices) {
 
-    // Texture ÁÂÇ¥°è¶§¹®¿¡ (numSlices + 1) x 2 °³ÀÇ ¹öÅØ½º »ç¿ë
+    // Texture ì¢Œí‘œê³„ë•Œë¬¸ì— (numSlices + 1) x 2 ê°œì˜ ë²„í…ìŠ¤ ì‚¬ìš©
 
     const float dTheta = -XM_2PI / float(numSlices);
 
@@ -200,7 +200,7 @@ MeshData GeometryGenerator::MakeCylinder(const float bottomRadius,
 
     vector<Vertex>& vertices = meshData.vertices;
 
-    // ¿·¸éÀÇ ¹Ù´Ú ¹öÅØ½ºµé (ÀÎµ¦½º 0 ÀÌ»ó numSlices ¹Ì¸¸)
+    // ì˜†ë©´ì˜ ë°”ë‹¥ ë²„í…ìŠ¤ë“¤ (ì¸ë±ìŠ¤ 0 ì´ìƒ numSlices ë¯¸ë§Œ)
     for (int i = 0; i <= numSlices; i++) {
         Vertex v;
         v.position =
@@ -216,7 +216,7 @@ MeshData GeometryGenerator::MakeCylinder(const float bottomRadius,
         vertices.push_back(v);
     }
 
-    // ¿·¸éÀÇ ¸Ç À§ ¹öÅØ½ºµé (ÀÎµ¦½º numSlices ÀÌ»ó 2 * numSlices ¹Ì¸¸)
+    // ì˜†ë©´ì˜ ë§¨ ìœ„ ë²„í…ìŠ¤ë“¤ (ì¸ë±ìŠ¤ numSlices ì´ìƒ 2 * numSlices ë¯¸ë§Œ)
     for (int i = 0; i <= numSlices; i++) {
         Vertex v;
         v.position =
@@ -247,10 +247,10 @@ MeshData GeometryGenerator::MakeCylinder(const float bottomRadius,
 MeshData GeometryGenerator::MakeSphere(const float radius, const int numSlices,
     const int numStacks) {
 
-    // Âü°í: OpenGL Sphere
+    // ì°¸ê³ : OpenGL Sphere
     // http://www.songho.ca/opengl/gl_sphere.html
-    // Texture ÁÂÇ¥°è¶§¹®¿¡ (numSlices + 1) °³ÀÇ ¹öÅØ½º »ç¿ë (¸¶Áö¸·¿¡ ´İ¾ÆÁÖ´Â
-    // ¹öÅØ½º°¡ Áßº¹) StackÀº y À§ÂÊ ¹æÇâÀ¸·Î ½×¾Æ°¡´Â ¹æ½Ä
+    // Texture ì¢Œí‘œê³„ë•Œë¬¸ì— (numSlices + 1) ê°œì˜ ë²„í…ìŠ¤ ì‚¬ìš© (ë§ˆì§€ë§‰ì— ë‹«ì•„ì£¼ëŠ”
+    // ë²„í…ìŠ¤ê°€ ì¤‘ë³µ) Stackì€ y ìœ„ìª½ ë°©í–¥ìœ¼ë¡œ ìŒ“ì•„ê°€ëŠ” ë°©ì‹
 
     const float dTheta = -XM_2PI / float(numSlices);
     const float dPhi = -XM_PI / float(numStacks);
@@ -261,18 +261,18 @@ MeshData GeometryGenerator::MakeSphere(const float radius, const int numSlices,
 
     for (int j = 0; j <= numStacks; j++) {
 
-        // ½ºÅÃ¿¡ ½×ÀÏ ¼ö·Ï ½ÃÀÛÁ¡À» x-y Æò¸é¿¡¼­ È¸Àü ½ÃÄÑ¼­ À§·Î ¿Ã¸®´Â ±¸Á¶
+        // ìŠ¤íƒì— ìŒ“ì¼ ìˆ˜ë¡ ì‹œì‘ì ì„ x-y í‰ë©´ì—ì„œ íšŒì „ ì‹œì¼œì„œ ìœ„ë¡œ ì˜¬ë¦¬ëŠ” êµ¬ì¡°
         Vector3 stackStartPoint = Vector3::Transform(
             Vector3(0.0f, -radius, 0.0f), Matrix::CreateRotationZ(dPhi * j));
 
         for (int i = 0; i <= numSlices; i++) {
             Vertex v;
 
-            // ½ÃÀÛÁ¡À» x-z Æò¸é¿¡¼­ È¸Àü½ÃÅ°¸é¼­ ¿øÀ» ¸¸µå´Â ±¸Á¶
+            // ì‹œì‘ì ì„ x-z í‰ë©´ì—ì„œ íšŒì „ì‹œí‚¤ë©´ì„œ ì›ì„ ë§Œë“œëŠ” êµ¬ì¡°
             v.position = Vector3::Transform(
                 stackStartPoint, Matrix::CreateRotationY(dTheta * float(i)));
 
-            v.normal = v.position; // ¿øÁ¡ÀÌ ±¸ÀÇ Áß½É
+            v.normal = v.position; // ì›ì ì´ êµ¬ì˜ ì¤‘ì‹¬
             v.normal.Normalize();
             v.texcoord =
                 Vector2(float(i) / numSlices, 1.0f - float(j) / numStacks);
@@ -312,8 +312,8 @@ MeshData GeometryGenerator::MakeSphere(const float radius, const int numSlices,
 
 MeshData GeometryGenerator::MakeIcosahedron() {
 
-    // Luna DX12 ±³Àç Âü°í
-    // µî20¸éÃ¼
+    // Luna DX12 êµì¬ ì°¸ê³ 
+    // ë“±20ë©´ì²´
     // https://mathworld.wolfram.com/Isohedron.html
 
     const float X = 0.525731f;
@@ -376,7 +376,7 @@ MeshData GeometryGenerator::MakeTetrahedron() {
 
         Vertex v;
         v.position = points[i];
-        v.normal = v.position; // Áß½ÉÀÌ ¿øÁ¡
+        v.normal = v.position; // ì¤‘ì‹¬ì´ ì›ì 
         v.normal.Normalize();
 
         meshData.vertices.push_back(v);
@@ -393,15 +393,15 @@ MeshData GeometryGenerator::SubdivideToSphere(const float radius,
     using DirectX::SimpleMath::Matrix;
     using DirectX::SimpleMath::Vector3;
 
-    // ±¸ÀÇ Áß½ÉÀÌ ¿øÁ¡ÀÌ¶ó°í °¡Á¤
+    // êµ¬ì˜ ì¤‘ì‹¬ì´ ì›ì ì´ë¼ê³  ê°€ì •
 
-    // ±¸ÀÇ Ç¥¸éÀ¸·Î ¿Å±â°í ³ë¸Ö°ú texture ÁÂÇ¥ °è»ê
+    // êµ¬ì˜ í‘œë©´ìœ¼ë¡œ ì˜®ê¸°ê³  ë…¸ë©€ê³¼ texture ì¢Œí‘œ ê³„ì‚°
     auto ProjectVertex = [&](Vertex& v) {
         v.normal = v.position;
         v.normal.Normalize();
         v.position = v.normal * radius;
 
-        // ÁÖÀÇ: ÅØ½ºÃç°¡ ÀÌÀ½¸Å¿¡¼­ ±úÁı´Ï´Ù.
+        // ì£¼ì˜: í…ìŠ¤ì¶°ê°€ ì´ìŒë§¤ì—ì„œ ê¹¨ì§‘ë‹ˆë‹¤.
         // atan vs atan2
         // https://stackoverflow.com/questions/283406/what-is-the-difference-between-atan-and-atan2-in-c
         const float theta = atan2f(v.position.z, v.position.x);
@@ -419,7 +419,7 @@ MeshData GeometryGenerator::SubdivideToSphere(const float radius,
         v2.normal = faceNormal;
         };
 
-    // ¹öÅØ½º°¡ Áßº¹µÇ´Â ±¸Á¶·Î ±¸Çö
+    // ë²„í…ìŠ¤ê°€ ì¤‘ë³µë˜ëŠ” êµ¬ì¡°ë¡œ êµ¬í˜„
     MeshData newMesh;
     uint16_t count = 0;
     for (size_t i = 0; i < meshData.indices.size(); i += 3) {
@@ -480,12 +480,12 @@ MeshData GeometryGenerator::SubdivideToSphere(const float radius,
     return newMesh;
 }
 
-vector<MeshData> GeometryGenerator::ReadFromFile(std::string basePath, std::string filename)
+vector<MeshData> GeometryGenerator::ReadFromFile(const std::filesystem::path& file)
 {
     using namespace DirectX;
 
     ModelLoader modelLoader;
-    std::vector<MeshData> meshes = modelLoader.Load(basePath, filename);
+    std::vector<MeshData> meshes = modelLoader.Load(file);
 
     // Normalize vertices
     Vector3 vmin(FLT_MAX), vmax(-FLT_MAX);

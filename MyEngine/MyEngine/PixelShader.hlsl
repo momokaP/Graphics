@@ -1,22 +1,22 @@
-#define MAX_LIGHTS 3 // ½¦ÀÌ´õ¿¡¼­µµ #define »ç¿ë °¡´É
+#define MAX_LIGHTS 3 // ì‰ì´ë”ì—ì„œë„ #define ì‚¬ìš© ê°€ëŠ¥
 #define NUM_DIR_LIGHTS 1
 #define NUM_POINT_LIGHTS 1
 #define NUM_SPOT_LIGHTS 1
 
-// ÀçÁú
+// ì¬ì§ˆ
 struct Material
 {
     float3 ambient;
     float shininess;
     float3 diffuse;
-    float dummy1; // 16 bytes ¸ÂÃçÁÖ±â À§ÇØ Ãß°¡
+    float dummy1; // 16 bytes ë§ì¶°ì£¼ê¸° ìœ„í•´ ì¶”ê°€
     float3 specular;
     float dummy2;
     float3 fresnelR0;
     float dummy3;
 };
 
-// Á¶¸í
+// ì¡°ëª…
 struct Light
 {
     float3 strength;
@@ -45,8 +45,8 @@ float3 ComputeDirectionalLight(Light L, Material mat, float3 normal,
     float ndotl = max(dot(lightVec, normal), 0.0f);
     float3 lightStrength = L.strength * ndotl;
 
-    // Luna DX12 Ã¥¿¡¼­´Â Specular °è»ê¿¡µµ
-    // Lambert's law°¡ Àû¿ëµÈ lightStrength¸¦ »ç¿ëÇÕ´Ï´Ù.
+    // Luna DX12 ì±…ì—ì„œëŠ” Specular ê³„ì‚°ì—ë„
+    // Lambert's lawê°€ ì ìš©ëœ lightStrengthë¥¼ ì‚¬ìš©í•©ë‹ˆë‹¤.
     return BlinnPhong(lightStrength, lightVec, normal, toEye, mat);
 }
 
@@ -61,10 +61,10 @@ float3 ComputePointLight(Light L, Material mat, float3 pos, float3 normal,
 {
     float3 lightVec = L.position - pos;
 
-    // ½¦ÀÌµùÇÒ ÁöÁ¡ºÎÅÍ Á¶¸í±îÁöÀÇ °Å¸® °è»ê
+    // ì‰ì´ë”©í•  ì§€ì ë¶€í„° ì¡°ëª…ê¹Œì§€ì˜ ê±°ë¦¬ ê³„ì‚°
     float d = length(lightVec);
 
-    // ³Ê¹« ¸Ö¸é Á¶¸íÀÌ Àû¿ëµÇÁö ¾ÊÀ½
+    // ë„ˆë¬´ ë©€ë©´ ì¡°ëª…ì´ ì ìš©ë˜ì§€ ì•ŠìŒ
     if (d > L.fallOffEnd)
     {
         return float3(0.0, 0.0, 0.0);
@@ -88,10 +88,10 @@ float3 ComputeSpotLight(Light L, Material mat, float3 pos, float3 normal,
 {
     float3 lightVec = L.position - pos;
 
-    // ½¦ÀÌµùÇÒ ÁöÁ¡ºÎÅÍ Á¶¸í±îÁöÀÇ °Å¸® °è»ê
+    // ì‰ì´ë”©í•  ì§€ì ë¶€í„° ì¡°ëª…ê¹Œì§€ì˜ ê±°ë¦¬ ê³„ì‚°
     float d = length(lightVec);
 
-    // ³Ê¹« ¸Ö¸é Á¶¸íÀÌ Àû¿ëµÇÁö ¾ÊÀ½
+    // ë„ˆë¬´ ë©€ë©´ ì¡°ëª…ì´ ì ìš©ë˜ì§€ ì•ŠìŒ
     if (d > L.fallOffEnd)
     {
         return float3(0.0f, 0.0f, 0.0f);
@@ -112,7 +112,7 @@ float3 ComputeSpotLight(Light L, Material mat, float3 pos, float3 normal,
         return BlinnPhong(lightStrength, lightVec, normal, toEye, mat);
     }
     
-    // if¿¡ else°¡ ¾øÀ» °æ¿ì °æ°í ¹ß»ı
+    // ifì— elseê°€ ì—†ì„ ê²½ìš° ê²½ê³  ë°œìƒ
     // warning X4000: use of potentially uninitialized variable
 }
 
@@ -131,10 +131,10 @@ cbuffer BasicPixelConstantBuffer : register(b0)
 struct PSInput
 {
     float4 posProj : SV_POSITION; // Screen position
-    float3 posWorld : POSITION; // World position (Á¶¸í °è»ê¿¡ »ç¿ë)
+    float3 posWorld : POSITION; // World position (ì¡°ëª… ê³„ì‚°ì— ì‚¬ìš©)
     float3 normalWorld : NORMAL;
     float2 texcoord : TEXCOORD;
-    float3 color : COLOR; // Normal lines ½¦ÀÌ´õ¿¡¼­ »ç¿ë
+    float3 color : COLOR; // Normal lines ì‰ì´ë”ì—ì„œ ì‚¬ìš©
 };
 
 Texture2D g_texture0 : register(t0);
@@ -145,13 +145,13 @@ TextureCube g_textureCubeSpecular : register(t3);
 SamplerState g_sampler : register(s0);
 SamplerState g_linearSampler : register(s1);
 
-float3 ACESFilm(float3 x)   // ±Ù»ç ACES Åæ¸ÅÇÎ
+float3 ACESFilm(float3 x)   // ê·¼ì‚¬ ACES í†¤ë§¤í•‘
 {
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
 // Schlick approximation: Eq. 9.17 in "Real-Time Rendering 4th Ed."
-// fresnelR0´Â ¹°ÁúÀÇ °íÀ¯ ¼ºÁú
+// fresnelR0ëŠ” ë¬¼ì§ˆì˜ ê³ ìœ  ì„±ì§ˆ
 // Water : (0.02, 0.02, 0.02)
 // Glass : (0.08, 0.08, 0.08)
 // Plastic : (0.05, 0.05, 0.05)
@@ -160,18 +160,18 @@ float3 ACESFilm(float3 x)   // ±Ù»ç ACES Åæ¸ÅÇÎ
 // Copper: (0.95, 0.64, 0.54)
 float3 SchlickFresnel(float3 fresnelR0, float3 normal, float3 toEye)
 {
-    // Âü°í ÀÚ·áµé
+    // ì°¸ê³  ìë£Œë“¤
     // THE SCHLICK FRESNEL APPROXIMATION by Zander Majercik, NVIDIA
     // http://psgraphics.blogspot.com/2020/03/fresnel-equations-schlick-approximation.html
     
     float normalDotView = saturate(dot(normal, toEye));
 
-    float f0 = 1.0f - normalDotView; // 90µµÀÌ¸é f0 = 1, 0µµÀÌ¸é f0 = 0
+    float f0 = 1.0f - normalDotView; // 90ë„ì´ë©´ f0 = 1, 0ë„ì´ë©´ f0 = 0
 
-    // 1.0 º¸´Ù ÀÛÀº °ªÀº ¿©·¯ ¹ø °öÇÏ¸é ´õ ÀÛÀº °ªÀÌ µË´Ï´Ù.
-    // 0µµ -> f0 = 0 -> fresnelR0 ¹İÈ¯
-    // 90µµ -> f0 = 1.0 -> float3(1.0) ¹İÈ¯
-    // 0µµ¿¡ °¡±î¿î °¡ÀåÀÚ¸®´Â Specular »ö»ó, 90µµ¿¡ °¡±î¿î ¾ÈÂÊÀº °íÀ¯ »ö»ó(fresnelR0)
+    // 1.0 ë³´ë‹¤ ì‘ì€ ê°’ì€ ì—¬ëŸ¬ ë²ˆ ê³±í•˜ë©´ ë” ì‘ì€ ê°’ì´ ë©ë‹ˆë‹¤.
+    // 0ë„ -> f0 = 0 -> fresnelR0 ë°˜í™˜
+    // 90ë„ -> f0 = 1.0 -> float3(1.0) ë°˜í™˜
+    // 0ë„ì— ê°€ê¹Œìš´ ê°€ì¥ìë¦¬ëŠ” Specular ìƒ‰ìƒ, 90ë„ì— ê°€ê¹Œìš´ ì•ˆìª½ì€ ê³ ìœ  ìƒ‰ìƒ(fresnelR0)
     return fresnelR0 + (1.0f - fresnelR0) * pow(f0, 5.0);
 }
 
@@ -220,7 +220,7 @@ float4 main(PSInput input) : SV_TARGET
         float4 diffuse = g_textureCubeDiffuse.Sample(g_sampler, input.normalWorld);
         float4 specular = g_textureCube.Sample(g_sampler, reflect(-toEye, input.normalWorld));
     
-        const float exposure = 1.0; // ¹à±â Á¶Àı (1~3 Á¤µµ·Î ¹Ù²ã º¸±â)
+        const float exposure = 1.0; // ë°ê¸° ì¡°ì ˆ (1~3 ì •ë„ë¡œ ë°”ê¿” ë³´ê¸°)
         diffuse = float4(ACESFilm(diffuse.xyz * exposure), 1.0);
         diffuse.xyz = pow(diffuse.xyz, 1.0 / 2.2);
         specular = float4(ACESFilm(specular.xyz * exposure), 1.0);
@@ -231,7 +231,7 @@ float4 main(PSInput input) : SV_TARGET
         diffuse.xyz *= material.diffuse;
         specular.xyz *= material.specular;
         
-        // Âü°í: https://www.shadertoy.com/view/lscBW4
+        // ì°¸ê³ : https://www.shadertoy.com/view/lscBW4
         float3 f = SchlickFresnel(material.fresnelR0, input.normalWorld, toEye);
         specular.xyz *= f;
     
@@ -246,9 +246,9 @@ float4 main(PSInput input) : SV_TARGET
     {
         //float3 hdr = g_textureCube.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
 
-        //const float exposure = 1.0; // ¹à±â Á¶Àı (1~3 Á¤µµ·Î ¹Ù²ã º¸±â)
-        //float3 color3 = ACESFilm(hdr * exposure); // HDR ¡æ 0~1
-        //color3 = pow(color3, 1.0 / 2.2); // ¼±Çü ¡æ °¨¸¶ (¸ğ´ÏÅÍ¿ë)
+        //const float exposure = 1.0; // ë°ê¸° ì¡°ì ˆ (1~3 ì •ë„ë¡œ ë°”ê¿” ë³´ê¸°)
+        //float3 color3 = ACESFilm(hdr * exposure); // HDR â†’ 0~1
+        //color3 = pow(color3, 1.0 / 2.2); // ì„ í˜• â†’ ê°ë§ˆ (ëª¨ë‹ˆí„°ìš©)
 
         //return float4(color3, 1.0);
     }

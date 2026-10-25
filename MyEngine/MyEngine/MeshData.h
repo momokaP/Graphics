@@ -3,11 +3,12 @@
 #include <directxtk12/SimpleMath.h>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include "Vertex.h"
 
 struct MeshData {
     std::vector<Vertex>   vertices;
     std::vector<uint32_t> indices;
-    std::string           albedoTexturePath;
+    std::filesystem::path albedoTexturePath;
 };

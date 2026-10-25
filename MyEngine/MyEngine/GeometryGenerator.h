@@ -7,8 +7,6 @@
 #include "MeshData.h"
 #include "ModelLoader.h"
 
-using namespace std;
-
 using namespace DirectX;
 using DirectX::SimpleMath::Matrix;
 using DirectX::SimpleMath::Vector2;
@@ -27,5 +25,5 @@ public:
     static MeshData MakeTetrahedron();
     static MeshData MakeIcosahedron();
     static MeshData SubdivideToSphere(const float radius, MeshData meshData);
-    static vector<MeshData> ReadFromFile(std::string basePath, std::string filename);
+    static std::vector<MeshData> ReadFromFile(const std::filesystem::path& file);
 };

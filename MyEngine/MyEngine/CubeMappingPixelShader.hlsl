@@ -4,13 +4,13 @@ SamplerState g_sampler : register(s1);
 struct PixelShaderInput
 {
     float4 posProj : SV_POSITION; // Screen position
-    float3 posWorld : POSITION; // World position (Á¶¸í °è»ê¿¡ »ç¿ë)
+    float3 posWorld : POSITION; // World position (ì¡°ëª… ê³„ì‚°ì— ì‚¬ìš©)
     float3 normalWorld : NORMAL;
     float2 texcoord : TEXCOORD;
-    float3 color : COLOR; // Normal lines ½¦ÀÌ´õ¿¡¼­ »ç¿ë
+    float3 color : COLOR; // Normal lines ì‰ì´ë”ì—ì„œ ì‚¬ìš©
 };
 
-float3 ACESFilm(float3 x)   // ±Ù»ç ACES Åæ¸ÅÇÎ
+float3 ACESFilm(float3 x)   // ê·¼ì‚¬ ACES í†¤ë§¤í•‘
 {
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
@@ -19,9 +19,9 @@ float4 main(PixelShaderInput input) : SV_TARGET
 {
     float3 hdr = g_textureCube0.Sample(g_sampler, input.posWorld).rgb;
 
-    const float exposure = 1.0; // ¹à±â Á¶Àı (1~3 Á¤µµ·Î ¹Ù²ã º¸±â)
-    float3 color = ACESFilm(hdr * exposure); // HDR ¡æ 0~1
-    color = pow(color, 1.0 / 2.2); // ¼±Çü ¡æ °¨¸¶ (¸ğ´ÏÅÍ¿ë)
+    const float exposure = 1.0; // ë°ê¸° ì¡°ì ˆ (1~3 ì •ë„ë¡œ ë°”ê¿” ë³´ê¸°)
+    float3 color = ACESFilm(hdr * exposure); // HDR â†’ 0~1
+    color = pow(color, 1.0 / 2.2); // ì„ í˜• â†’ ê°ë§ˆ (ëª¨ë‹ˆí„°ìš©)
 
     return float4(color, 1.0);
 }

@@ -7,6 +7,6 @@ float4 main(float4 pos : SV_POSITION) : SV_TARGET
     float2 uv = pos.xy * invSize;
     float3 c = g_src.Sample(g_linear, uv).rgb;
     float lum = dot(c, float3(0.2126, 0.7152, 0.0722));
-    float k = max(lum - threshold, 0.0) / max(lum, 1e-4); // threshold ³Ñ´Â ¸¸Å­¸¸ ºÎµå·´°Ô ³²±è
+    float k = max(lum - threshold, 0.0) / max(lum, 1e-4); // threshold ë„˜ëŠ” ë§Œí¼ë§Œ ë¶€ë“œëŸ½ê²Œ ë‚¨ê¹€
     return float4(c * k, 1.0);
 }

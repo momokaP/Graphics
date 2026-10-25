@@ -1,4 +1,4 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 #include "MyEngine.h"
 #include <filesystem>
 
@@ -16,6 +16,7 @@ MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 
 void MyEngine::OnInit()
 {
+	Paths::Init();
 	LoadPipeline();
 	LoadAssets();
 	InitGUI();
@@ -254,13 +255,8 @@ void MyEngine::LoadAssets()
 	}
 
 	{
-		UINT8* pVertexShaderData = nullptr;
-		UINT8* pPixelShaderData = nullptr;
-		UINT vertexShaderDataLength = 0;
-		UINT pixelShaderDataLength = 0;
-
-		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"VertexShader.cso").c_str(), &pVertexShaderData, &vertexShaderDataLength));
-		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"PixelShader.cso").c_str(), &pPixelShaderData, &pixelShaderDataLength));
+		auto vs = LoadShader(GetAssetFullPath(L"VertexShader.cso"));
+		auto ps = LoadShader(GetAssetFullPath(L"PixelShader.cso"));
 
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -271,8 +267,8 @@ void MyEngine::LoadAssets()
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 		psoDesc.pRootSignature = m_rootSignature.Get();
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVertexShaderData, vertexShaderDataLength);
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderData, pixelShaderDataLength);
+		psoDesc.VS = ToBytecode(vs);
+		psoDesc.PS = ToBytecode(ps);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -318,19 +314,17 @@ void MyEngine::LoadAssets()
 
 	// ── 후처리 PSO 3개 ──
 	{
-		UINT8* vs = nullptr; UINT vsLen = 0;
-		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"FullscreenVS.cso").c_str(), &vs, &vsLen));
+		auto vs = LoadShader(GetAssetFullPath(L"FullscreenVS.cso"));
 
 		auto makePostPSO = [&](const wchar_t* psFile, DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat,
 			ComPtr<ID3D12PipelineState>& out)
 			{
-				UINT8* ps = nullptr; UINT psLen = 0;
-				ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(psFile).c_str(), &ps, &psLen));
+				auto ps = LoadShader(GetAssetFullPath(psFile));
 
 				D3D12_GRAPHICS_PIPELINE_STATE_DESC d = {};
 				d.pRootSignature = m_postRootSignature.Get();
-				d.VS = CD3DX12_SHADER_BYTECODE(vs, vsLen);
-				d.PS = CD3DX12_SHADER_BYTECODE(ps, psLen);
+				d.VS = ToBytecode(vs);
+				d.PS = ToBytecode(ps);
 				d.InputLayout = { nullptr, 0 };
 				d.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 				d.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -352,13 +346,8 @@ void MyEngine::LoadAssets()
 	}
 
 	{
-		UINT8* pVertexShaderData = nullptr;
-		UINT8* pPixelShaderData = nullptr;
-		UINT vertexShaderDataLength = 0;
-		UINT pixelShaderDataLength = 0;
-
-		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"CubeMappingVertexShader.cso").c_str(), &pVertexShaderData, &vertexShaderDataLength));
-		ThrowIfFailed(ReadDataFromFile(GetAssetFullPath(L"CubeMappingPixelShader.cso").c_str(), &pPixelShaderData, &pixelShaderDataLength));
+		auto vs = LoadShader(GetAssetFullPath(L"CubeMappingVertexShader.cso"));
+		auto ps = LoadShader(GetAssetFullPath(L"CubeMappingPixelShader.cso"));
 
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -369,8 +358,8 @@ void MyEngine::LoadAssets()
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 		psoDesc.pRootSignature = m_rootSignature.Get();
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVertexShaderData, vertexShaderDataLength);
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderData, pixelShaderDataLength);
+		psoDesc.VS = ToBytecode(vs);
+		psoDesc.PS = ToBytecode(ps);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -425,25 +414,26 @@ void MyEngine::LoadAssets()
 
 	// Create the texture.
 	{
-		// const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/zaku2/";
-		// std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "zaku2_1.fbx");
+		auto meshDatas = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/zaku2/zaku2_1.fbx"));
+		// auto meshDatas = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/sinanju/sinanju.fbx"));
 
-		// const std::string modelDir = "c:/Users/9451s/OneDrive/Documents/sinanju/";
-		// std::vector<MeshData> meshDatas = GeometryGenerator::ReadFromFile(modelDir, "sinanju.gltf");
-
-		MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
+		/*MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
 		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
 		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
 		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
 		std::vector<MeshData> meshDatas;
-		meshDatas.push_back(meshData);
+		meshDatas.push_back(meshData);*/
+
+		/*MeshData meshData = GeometryGenerator::MakeBox();
+		std::vector<MeshData> meshDatas;
+		meshDatas.push_back(meshData);*/
 
 		DirectX::ResourceUploadBatch upload(m_device.Get());
 		upload.Begin();
 
 		// 기본 텍스처 (3번 칸) — 기존 코드 그대로
 		ThrowIfFailed(DirectX::CreateWICTextureFromFile(m_device.Get(), upload,
-			GetAssetFullPath(L"kotone.png").c_str(), m_texture.ReleaseAndGetAddressOf()));
+			Paths::Asset(L"Textures/kotone.png").c_str(), m_texture.ReleaseAndGetAddressOf()));
 
 		UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		UINT nextSrv = kModelSrvStart;
@@ -454,9 +444,8 @@ void MyEngine::LoadAssets()
 			mesh.ib = CreateIndexBuffer(m_device.Get(), md.indices);
 
 			if (!md.albedoTexturePath.empty() && std::filesystem::exists(md.albedoTexturePath)) {
-				std::wstring wpath = std::filesystem::path(md.albedoTexturePath).wstring();
 				if (SUCCEEDED(DirectX::CreateWICTextureFromFile(m_device.Get(), upload,
-					wpath.c_str(), mesh.texture.ReleaseAndGetAddressOf()))) {
+					md.albedoTexturePath.c_str(), mesh.texture.ReleaseAndGetAddressOf()))) {
 					mesh.srvIndex = nextSrv++;
 				}
 			}
@@ -477,21 +466,21 @@ void MyEngine::LoadAssets()
 
 		bool isCubeMap = false;
 		ThrowIfFailed(CreateDDSTextureFromFileEx(
-			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057EnvHDR.dds",
+			m_device.Get(), upload, Paths::Asset(L"DayEnvironmentHDRI057Brdf/DayEnvironmentHDRI057EnvHDR.dds").c_str(),
 			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
 			m_cubeMapTexture.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
 		assert(isCubeMap);
 		isCubeMap = false;
 
 		ThrowIfFailed(CreateDDSTextureFromFileEx(
-			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057DiffuseHDR.dds",
+			m_device.Get(), upload, Paths::Asset(L"DayEnvironmentHDRI057Brdf/DayEnvironmentHDRI057DiffuseHDR.dds").c_str(),
 			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
 			m_cubeMapTextureDiffuse.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
 		assert(isCubeMap);
 		isCubeMap = false;
 
 		ThrowIfFailed(CreateDDSTextureFromFileEx(
-			m_device.Get(), upload, L"D:/1234/DayEnvironmentHDRI057SpecularHDR.dds",
+			m_device.Get(), upload, Paths::Asset(L"DayEnvironmentHDRI057Brdf/DayEnvironmentHDRI057SpecularHDR.dds").c_str(),
 			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
 			m_cubeMapTextureSpecular.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
 		assert(isCubeMap);
@@ -967,9 +956,6 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 	UpdateSceneViewport();
 
 	// 깊이 버퍼를 붙였다면 여기서 재생성
-	m_depthStencil.Reset();
-	CreateDepthBuffer(width, height);
-
 	m_depthStencil.Reset();
 	CreateDepthBuffer(width, height);
 	CreatePostTargets(width, height);   // 추가

@@ -9,6 +9,7 @@
 #include <directxtk12/DDSTextureLoader.h>
 
 #include "Vertex.h"
+#include "Paths.h"
 
 using namespace DirectX;
 
@@ -52,7 +53,7 @@ private:
 	};
 	static_assert((sizeof(BasicVertexConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
-	// ÀçÁú
+	// ì¬ì§ˆ
 	struct Material {
 		Vector3 ambient = Vector3(0.0f);  // 12
 		float shininess = 1.0f;           // 4
@@ -64,7 +65,7 @@ private:
 		float dummy3;
 	};
 
-	// Á¶¸í
+	// ì¡°ëª…
 	struct Light {
 		Vector3 strength = Vector3(1.0f);              // 12
 		float fallOffStart = 0.0f;                     // 4
@@ -92,7 +93,7 @@ private:
 		VertexBuffer           vb;
 		IndexBuffer            ib;
 		ComPtr<ID3D12Resource> texture;
-		UINT                   srvIndex = 3;   // ÅØ½ºÃ³ ¾øÀ¸¸é ±âº» ÅØ½ºÃ³(3¹ø Ä­)
+		UINT                   srvIndex = 3;   // í…ìŠ¤ì²˜ ì—†ìœ¼ë©´ ê¸°ë³¸ í…ìŠ¤ì²˜(3ë²ˆ ì¹¸)
 	};
 	std::vector<Mesh> m_meshes;
 
@@ -179,17 +180,17 @@ private:
 	static constexpr UINT kCubeMapSrvIndexSpecular = 6;
 
 	static constexpr UINT kSkyboxCbvStart = 7;   // 7: b0, 8: b1
-	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // °°Àº ±¸Á¶Ã¼ Å¸ÀÔ
-	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer ¹İÈ¯ Å¸ÀÔ
+	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // ê°™ì€ êµ¬ì¡°ì²´ íƒ€ì…
+	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer ë°˜í™˜ íƒ€ì…
 
 	void CreateCubeSrv(ID3D12Resource* tex, UINT heapIndex);
 
 	static constexpr DXGI_FORMAT kHdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
-	// RTV Èü: 0,1 = ¹é¹öÆÛ / 2 = ¾À / 3,4 = ºí·ë
+	// RTV í™: 0,1 = ë°±ë²„í¼ / 2 = ì”¬ / 3,4 = ë¸”ë£¸
 	static constexpr UINT kSceneRtv = FrameCount;        // 2
 	static constexpr UINT kBloomRtv = FrameCount + 1;    // 3, 4
-	// CBV/SRV Èü: µÚÂÊ Ä­À» ÈÄÃ³¸® Àü¿ëÀ¸·Î »ç¿ë (¸ğµ¨ 16~°ú ¶³¾î¶ß¸²)
+	// CBV/SRV í™: ë’¤ìª½ ì¹¸ì„ í›„ì²˜ë¦¬ ì „ìš©ìœ¼ë¡œ ì‚¬ìš© (ëª¨ë¸ 16~ê³¼ ë–¨ì–´ëœ¨ë¦¼)
 	static constexpr UINT kSceneSrv = 100;
 	static constexpr UINT kBloomSrv = 101;               // 101, 102
 
@@ -200,9 +201,9 @@ private:
 	ComPtr<ID3D12RootSignature> m_postRootSignature;
 	ComPtr<ID3D12PipelineState> m_brightPSO, m_blurPSO, m_combinePSO;
 
-	struct PostConstants {          // ·çÆ® »ó¼ö 8°³ (b0)
-		float invSize[2];           // ±×¸®´Â ´ë»óÀÇ 1/ÇØ»óµµ
-		float direction[2];         // ºí·¯ ¹æÇâ
+	struct PostConstants {          // ë£¨íŠ¸ ìƒìˆ˜ 8ê°œ (b0)
+		float invSize[2];           // ê·¸ë¦¬ëŠ” ëŒ€ìƒì˜ 1/í•´ìƒë„
+		float direction[2];         // ë¸”ëŸ¬ ë°©í–¥
 		float threshold;
 		float strength;
 		float pad[2];

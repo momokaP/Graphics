@@ -4,21 +4,21 @@
 #include "Win32Application.h"
 
 struct VertexBuffer {
-	ComPtr<ID3D12Resource>   resource;   // ½ÇÁ¦ GPU ¸Ş¸ğ¸® (¼ö¸í °ü¸®)
-	D3D12_VERTEX_BUFFER_VIEW view;       // IASetVertexBuffers¿¡ ³Ñ±æ °Í
+	ComPtr<ID3D12Resource>   resource;   // ì‹¤ì œ GPU ë©”ëª¨ë¦¬ (ìˆ˜ëª… ê´€ë¦¬)
+	D3D12_VERTEX_BUFFER_VIEW view;       // IASetVertexBuffersì— ë„˜ê¸¸ ê²ƒ
 };
 
 struct IndexBuffer {
 	ComPtr<ID3D12Resource>  resource;
 	D3D12_INDEX_BUFFER_VIEW view;
-	UINT                    count;       // DrawIndexedInstanced¿¡ ÇÊ¿ä
+	UINT                    count;       // DrawIndexedInstancedì— í•„ìš”
 };
 
 struct ConstantBuffer
 {
-	ComPtr<ID3D12Resource> resource;   // GPU ¸Ş¸ğ¸® (¼ö¸í °ü¸®)
-	UINT8* mapped = nullptr;           // CPU¿¡¼­ ¾µ ÁÖ¼Ò (°è¼Ó ¸ÅÇÎµÈ »óÅÂ)
-	UINT   size = 0;                   // 256 Á¤·ÄµÈ ½ÇÁ¦ ¹öÆÛ Å©±â
+	ComPtr<ID3D12Resource> resource;   // GPU ë©”ëª¨ë¦¬ (ìˆ˜ëª… ê´€ë¦¬)
+	UINT8* mapped = nullptr;           // CPUì—ì„œ ì“¸ ì£¼ì†Œ (ê³„ì† ë§¤í•‘ëœ ìƒíƒœ)
+	UINT   size = 0;                   // 256 ì •ë ¬ëœ ì‹¤ì œ ë²„í¼ í¬ê¸°
 };
 
 class DXSample
