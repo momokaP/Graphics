@@ -2,6 +2,7 @@
 
 #include "DXSample.h"
 #include "GeometryGenerator.h"
+#include "RHI/GraphicsDevice.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
 #include <directxtk12/WICTextureLoader.h>
@@ -158,9 +159,7 @@ private:
 	void  UpdateSceneViewport();
 
 	UINT m_frameIndex;
-	HANDLE m_fenceEvent;
-	ComPtr<ID3D12Fence> m_fence;
-	UINT64 m_fenceValue;
+	GraphicsDevice m_gfx;
 
 	UINT m_imguiSrvNext = 10;
 

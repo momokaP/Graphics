@@ -45,6 +45,9 @@
     <ClCompile Include="Paths.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\RHI\GraphicsDevice.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -77,12 +80,16 @@
     <ClInclude Include="Paths.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\RHI\GraphicsDevice.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="PostCommon.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
+    <None Include="imgui.ini" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="VertexShader.hlsl">
@@ -111,8 +118,6 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="kotone.png">
-      <Filter>Resource Files</Filter>
-    </Image>
+    <Text Include="Copyright.txt" />
   </ItemGroup>
 </Project>
