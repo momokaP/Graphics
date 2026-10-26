@@ -3,6 +3,7 @@
 #include "DXSample.h"
 #include "GeometryGenerator.h"
 #include "RHI/GraphicsDevice.h"
+#include "RHI/DescriptorHeap.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
 #include <directxtk12/WICTextureLoader.h>
@@ -77,9 +78,9 @@ private:
 
 #define MAX_LIGHTS 3
 	struct BasicPixelConstantBuffer {
-		Vector3 eyeWorld;         
-		uint32_t useTexture;      
-		Material material;        
+		Vector3 eyeWorld;
+		uint32_t useTexture;
+		Material material;
 		Light lights[MAX_LIGHTS]; // 48 * MAX_LIGHTS
 		Vector3 rimColor = Vector3(1.0f);
 		float rimPower;
@@ -93,11 +94,9 @@ private:
 		VertexBuffer           vb;
 		IndexBuffer            ib;
 		ComPtr<ID3D12Resource> texture;
-		UINT                   srvIndex = 3;   // 텍스처 없으면 기본 텍스처(3번 칸)
+		DescriptorHandle srv;
 	};
 	std::vector<Mesh> m_meshes;
-
-	static constexpr UINT kModelSrvStart = 16;
 
 	CD3DX12_VIEWPORT m_viewport;
 	CD3DX12_RECT m_scissorRect;
@@ -107,18 +106,27 @@ private:
 	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<ID3D12RootSignature> m_rootSignature;
-	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
-	ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 	ComPtr<ID3D12PipelineState> m_cubeMapPipelineState;
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
-	UINT m_rtvDescriptorSize;
 
-	ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
+	DescriptorHeap m_rtvHeap, m_dsvHeap, m_srvHeap;   // srv = CBV/SRV/UAV (shader-visible)
+
+	DescriptorHandle m_backBufferRtv;                 // FrameCount칸 연속
+	DescriptorHandle m_sceneRtv, m_bloomRtv[2];
+	DescriptorHandle m_dsv;
+
+	DescriptorHandle m_vsCbvTable;                    // VS b0,b1 (2칸 연속)
+	DescriptorHandle m_psCbv;                         // PS b0
+	DescriptorHandle m_skyboxVsCbvTable;              // 스카이박스 VS b0,b1 (2칸 연속)
+	DescriptorHandle m_defaultTexSrv;
+	DescriptorHandle m_envSrv, m_irradianceSrv, m_specularSrv;
+	DescriptorHandle m_sceneSrv, m_bloomSrv[2];
+
 	ComPtr<ID3D12Resource>       m_depthStencil;
 	void CreateDepthBuffer(UINT width, UINT height);
 
-	void CreateTextureSrv(ID3D12Resource* tex, UINT heapIndex);
+	void CreateTextureSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE dst);
 
 	/*ComPtr<ID3D12Resource> m_vertexBuffer;
 	ComPtr<ID3D12Resource> m_indexBuffer;
@@ -129,13 +137,13 @@ private:
 
 	VertexBuffer m_vertexBuffer;
 	IndexBuffer m_indexBuffer;
-	
+
 	ConstantBuffer m_constantBuffer;
 	SceneConstantBuffer m_constantBufferData;
 
 	ConstantBuffer m_BasicVertexConstantBuffer;
 	BasicVertexConstantBuffer m_BasicVertexConstantBufferData;
-	
+
 	ConstantBuffer m_BasicPixelConstantBuffer;
 	BasicPixelConstantBuffer m_BasicPixelConstantBufferData;
 
@@ -145,8 +153,8 @@ private:
 	float m_materialSpecular = 0.2f;
 
 	Vector3 m_modelTranslation = Vector3(0.0f);
-    Vector3 m_modelRotation = Vector3(-0.6f, 1.0f, 0.0f);
-    Vector3 m_modelScaling = Vector3(0.5f);
+	Vector3 m_modelRotation = Vector3(-0.6f, 1.0f, 0.0f);
+	Vector3 m_modelScaling = Vector3(0.5f);
 	float m_viewRot = 0.0f;
 
 	float m_projFovAngleY = 70.0f;
@@ -161,36 +169,21 @@ private:
 	UINT m_frameIndex;
 	GraphicsDevice m_gfx;
 
-	UINT m_imguiSrvNext = 10;
-
 	void LoadPipeline();
 	void LoadAssets();
 	void PopulateCommandList();
 	void WaitForPreviousFrame();
 
 	ComPtr<ID3D12Resource> m_cubeMapTexture;
-	static constexpr UINT kCubeMapSrvIndex = 4;
-
 	ComPtr<ID3D12Resource> m_cubeMapTextureDiffuse;
-	static constexpr UINT kCubeMapSrvIndexDiffuse = 5;
-
 	ComPtr<ID3D12Resource> m_cubeMapTextureSpecular;
-	static constexpr UINT kCubeMapSrvIndexSpecular = 6;
 
-	static constexpr UINT kSkyboxCbvStart = 7;   // 7: b0, 8: b1
 	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // 같은 구조체 타입
 	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer 반환 타입
 
-	void CreateCubeSrv(ID3D12Resource* tex, UINT heapIndex);
+	void CreateCubeSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE dst);
 
 	static constexpr DXGI_FORMAT kHdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-
-	// RTV 힙: 0,1 = 백버퍼 / 2 = 씬 / 3,4 = 블룸
-	static constexpr UINT kSceneRtv = FrameCount;        // 2
-	static constexpr UINT kBloomRtv = FrameCount + 1;    // 3, 4
-	// CBV/SRV 힙: 뒤쪽 칸을 후처리 전용으로 사용 (모델 16~과 떨어뜨림)
-	static constexpr UINT kSceneSrv = 100;
-	static constexpr UINT kBloomSrv = 101;               // 101, 102
 
 	ComPtr<ID3D12Resource> m_sceneColor;
 	ComPtr<ID3D12Resource> m_bloom[2];
@@ -204,7 +197,7 @@ private:
 		float direction[2];         // 블러 방향
 		float threshold;
 		float strength;
-		float exposure;             
+		float exposure;
 		float pad;
 	};
 	float m_bloomThreshold = 1.0f;
@@ -213,6 +206,7 @@ private:
 
 	int   m_bloomBlurCount = 2;
 
-	void CreateRenderTexture(ComPtr<ID3D12Resource>& tex, UINT w, UINT h, UINT rtvIndex, UINT srvIndex);
+	void CreateRenderTexture(ComPtr<ID3D12Resource>& tex, UINT w, UINT h, 
+		const DescriptorHandle& rtv, const DescriptorHandle& srv);
 	void CreatePostTargets(UINT width, UINT height);
 };

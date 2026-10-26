@@ -48,6 +48,9 @@
     <ClCompile Include="Engine\RHI\GraphicsDevice.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\RHI\DescriptorHeap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -81,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\RHI\GraphicsDevice.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\RHI\DescriptorHeap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
