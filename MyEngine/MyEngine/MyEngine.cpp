@@ -38,46 +38,20 @@ void MyEngine::LoadPipeline()
 	m_device = m_gfx.Device();
 	m_commandQueue = m_gfx.Queue();
 
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-	swapChainDesc.BufferCount = FrameCount;
-	swapChainDesc.Width = m_width;
-	swapChainDesc.Height = m_height;
-	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	swapChainDesc.SampleDesc.Count = 1;
+	m_rtvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false, L"RTV Heap");
+	m_dsvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 4, false, L"DSV Heap");
+	m_srvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, true, L"CBV/SRV Heap");
 
-	ComPtr<IDXGISwapChain1> swapChain;
-	ThrowIfFailed(m_gfx.Factory()->CreateSwapChainForHwnd(
-		m_commandQueue.Get(),
-		Win32Application::GetHwnd(),
-		&swapChainDesc,
-		nullptr,
-		nullptr,
-		&swapChain
-	));
+	SwapChain::Desc scDesc;
+	scDesc.width = m_width;
+	scDesc.height = m_height;
+	scDesc.bufferCount = FrameCount;
+	scDesc.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	m_swapChain.Init(m_gfx, m_rtvHeap, Win32Application::GetHwnd(), scDesc);
+	m_frameIndex = m_swapChain.CurrentIndex();
 
-	ThrowIfFailed(m_gfx.Factory()->MakeWindowAssociation(Win32Application::GetHwnd(), DXGI_MWA_NO_ALT_ENTER));
-	
-	ThrowIfFailed(swapChain.As(&m_swapChain));
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
-
-	{
-		m_rtvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false, L"RTV Heap");
-		m_dsvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 4, false, L"DSV Heap");
-		m_srvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, true, L"CBV/SRV Heap");
-		
-		m_dsv = m_dsvHeap.Allocate();
-		m_backBufferRtv = m_rtvHeap.Allocate(FrameCount);
-		for (UINT n = 0; n < FrameCount; n++)
-		{
-			ThrowIfFailed(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])));
-			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr,
-				m_rtvHeap.Cpu(m_backBufferRtv.index + n));
-		}
-		
-		CreateDepthBuffer(m_width, m_height);
-	}
+	m_dsv = m_dsvHeap.Allocate();
+	CreateDepthBuffer(m_width, m_height);
 
 	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)));
 }
@@ -284,7 +258,7 @@ void MyEngine::LoadAssets()
 
 		makePostPSO(L"BloomBrightPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, m_brightPSO);
 		makePostPSO(L"BloomBlurPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, m_blurPSO);
-		makePostPSO(L"BloomCombinePS.cso", DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, m_combinePSO);
+		makePostPSO(L"BloomCombinePS.cso", m_swapChain.Format(), DXGI_FORMAT_D32_FLOAT, m_combinePSO);
 	}
 
 	{
@@ -474,7 +448,7 @@ void MyEngine::InitGUI()
 	initInfo.Device = m_device.Get();
 	initInfo.CommandQueue = m_commandQueue.Get();
 	initInfo.NumFramesInFlight = FrameCount;
-	initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+	initInfo.RTVFormat = m_swapChain.Format();
 	initInfo.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	initInfo.SrvDescriptorHeap = m_srvHeap.Heap();
 	initInfo.UserData = &m_srvHeap;
@@ -574,7 +548,7 @@ void MyEngine::OnRender()
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
 	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
-	ThrowIfFailed(m_swapChain->Present(1, 0));
+	m_swapChain.Present(m_vsync);
 
 	WaitForPreviousFrame();
 }
@@ -692,11 +666,12 @@ void MyEngine::PopulateCommandList()
 	}
 
 	// 3) Combine: scene + bloom[0] → 백버퍼
-	auto bbToRT = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(),
+	ID3D12Resource* backBuffer = m_swapChain.CurrentBackBuffer();
+	auto bbToRT = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer,
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	m_commandList->ResourceBarrier(1, &bbToRT);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_rtvHeap.Cpu(m_backBufferRtv.index + m_frameIndex);
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_swapChain.CurrentRtv();
 	m_commandList->OMSetRenderTargets(1, &rtv, FALSE, &m_dsv.cpu);   // ImGui PSO의 DSV 포맷과 맞춤
 	m_commandList->ClearRenderTargetView(rtv, kSceneClear, 0, nullptr);   // GUI 영역 배경
 
@@ -714,8 +689,7 @@ void MyEngine::PopulateCommandList()
 	// ImGui: 박스 다음, Present 배리어 전
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
 
-	auto toPresent = CD3DX12_RESOURCE_BARRIER::Transition(
-		m_renderTargets[m_frameIndex].Get(), 
+	auto toPresent = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer,
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 	m_commandList->ResourceBarrier(1, &toPresent);
 
@@ -725,7 +699,7 @@ void MyEngine::PopulateCommandList()
 void MyEngine::WaitForPreviousFrame()
 {
 	m_gfx.Flush();
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+	m_frameIndex = m_swapChain.CurrentIndex();
 }
 
 void MyEngine::CreateCubeSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE dst)
@@ -742,6 +716,10 @@ void MyEngine::CreateCubeSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE ds
 
 void MyEngine::UpdateGUI() 
 {
+	ImGui::Checkbox("VSync", &m_vsync);
+	if (!m_swapChain.IsTearingSupported())
+		ImGui::TextDisabled("(tearing not supported)");
+
 	ImGui::SliderFloat("Exposure", &m_exposure, 0.1f, 5.0f);
 	ImGui::SliderFloat("Bloom Threshold", &m_bloomThreshold, 0.0f, 3.0f);
 	ImGui::SliderFloat("Bloom Strength", &m_bloomStrength, 0.0f, 3.0f);
@@ -812,40 +790,20 @@ void MyEngine::UpdateGUI()
 void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 {
 	// 초기화 전이거나, 최소화 / 크기 0이면 무시
-	if (!m_swapChain || minimized || width == 0 || height == 0)
+	if (!m_swapChain.IsValid() || minimized || width == 0 || height == 0)
 		return;
 
 	// 1. GPU가 현재 백버퍼를 다 쓸 때까지 대기
 	WaitForPreviousFrame();
+	m_swapChain.Resize(width, height);;
+	m_frameIndex = m_swapChain.CurrentIndex();
 
-	// 2. 백버퍼 참조 해제 (DX11의 m_renderTargetView.Reset()에 해당)
-	for (UINT n = 0; n < FrameCount; n++)
-		m_renderTargets[n].Reset();
-
-	// 3. 스왑체인 버퍼 크기 변경
-	DXGI_SWAP_CHAIN_DESC desc = {};
-	m_swapChain->GetDesc(&desc);
-	ThrowIfFailed(m_swapChain->ResizeBuffers(FrameCount, width, height,
-		desc.BufferDesc.Format, desc.Flags));
-
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
-
-	// 4. RTV를 같은 힙 칸에 다시 생성 (힙은 재생성 불필요)
-	for (UINT n = 0; n < FrameCount; n++)
-	{
-		ThrowIfFailed(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])));
-		m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr,
-			m_rtvHeap.Cpu(m_backBufferRtv.index + n));
-	}
-
-	// 5. 크기 의존 상태 갱신
-	UpdateForSizeChange(width, height);   // m_width, m_height, m_aspectRatio
+	UpdateForSizeChange(width, height); 
 	UpdateSceneViewport();
 
-	// 깊이 버퍼를 붙였다면 여기서 재생성
 	m_depthStencil.Reset();
 	CreateDepthBuffer(width, height);
-	CreatePostTargets(width, height);   // 추가
+	CreatePostTargets(width, height);
 }
 
 void MyEngine::CreateDepthBuffer(UINT width, UINT height)

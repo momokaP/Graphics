@@ -4,6 +4,7 @@
 #include "GeometryGenerator.h"
 #include "RHI/GraphicsDevice.h"
 #include "RHI/DescriptorHeap.h"
+#include "RHI/SwapChain.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
 #include <directxtk12/WICTextureLoader.h>
@@ -100,9 +101,9 @@ private:
 
 	CD3DX12_VIEWPORT m_viewport;
 	CD3DX12_RECT m_scissorRect;
-	ComPtr<IDXGISwapChain3> m_swapChain;
+	SwapChain m_swapChain;
+	bool m_vsync = true;
 	ComPtr<ID3D12Device> m_device;
-	ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
 	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<ID3D12RootSignature> m_rootSignature;
@@ -112,7 +113,6 @@ private:
 
 	DescriptorHeap m_rtvHeap, m_dsvHeap, m_srvHeap;   // srv = CBV/SRV/UAV (shader-visible)
 
-	DescriptorHandle m_backBufferRtv;                 // FrameCount칸 연속
 	DescriptorHandle m_sceneRtv, m_bloomRtv[2];
 	DescriptorHandle m_dsv;
 

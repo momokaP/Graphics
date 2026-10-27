@@ -163,6 +163,7 @@
     <ClCompile Include="DXSample.cpp" />
     <ClCompile Include="Engine\RHI\DescriptorHeap.cpp" />
     <ClCompile Include="Engine\RHI\GraphicsDevice.cpp" />
+    <ClCompile Include="Engine\RHI\SwapChain.cpp" />
     <ClCompile Include="GeometryGenerator.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ModelLoader.cpp" />
@@ -176,6 +177,7 @@
     <ClInclude Include="DXSampleHelper.h" />
     <ClInclude Include="Engine\RHI\DescriptorHeap.h" />
     <ClInclude Include="Engine\RHI\GraphicsDevice.h" />
+    <ClInclude Include="Engine\RHI\SwapChain.h" />
     <ClInclude Include="GeometryGenerator.h" />
     <ClInclude Include="MeshData.h" />
     <ClInclude Include="ModelLoader.h" />
