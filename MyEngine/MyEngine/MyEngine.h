@@ -7,6 +7,8 @@
 #include "RHI/SwapChain.h"
 #include "RHI/Texture.h"
 #include "RHI/GpuBuffer.h"
+#include "RHI/RootSignatureBuilder.h"
+#include "RHI/PipelineBuilder.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
 #include <directxtk12/WICTextureLoader.h>
@@ -182,6 +184,22 @@ private:
 	float m_exposure = 1.0f;
 
 	int   m_bloomBlurCount = 2;
+
+	enum MainRootParam : UINT {
+		RP_VSConstants = 0,   // VS b0, b1
+		RP_PSConstants,       // PS b0
+		RP_Albedo,            // t0
+		RP_EnvMap,            // t1
+		RP_Irradiance,        // t2
+		RP_Specular,          // t3
+		RP_MainCount
+	};
+	enum PostRootParam : UINT {
+		PRP_Constants = 0,    // b0 (루트 상수)
+		PRP_Source0,          // t0
+		PRP_Source1,          // t1
+		PRP_Count
+	};
 
 	void CreatePostTargets(UINT width, UINT height);
 };

@@ -74,199 +74,74 @@ void MyEngine::CreatePostTargets(UINT width, UINT height)
 void MyEngine::LoadAssets()
 {
 	{
-		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-
-		if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-		{
-			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-		}
-
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[6];
-		CD3DX12_ROOT_PARAMETER1 rootParameters[6];
-
-		// VS: 힙 0,1번 칸 → b0, b1
-		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, 0,
-			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
-
-		// PS: 힙 2번 칸 → b0
-		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0,
-			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
-
-		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 
-			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_PIXEL);
-
-		ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0,
-			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-		rootParameters[3].InitAsDescriptorTable(1, &ranges[3], D3D12_SHADER_VISIBILITY_PIXEL);
-
-		ranges[4].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0,
-			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-		rootParameters[4].InitAsDescriptorTable(1, &ranges[4], D3D12_SHADER_VISIBILITY_PIXEL);
-
-		ranges[5].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0,
-			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-		rootParameters[5].InitAsDescriptorTable(1, &ranges[5], D3D12_SHADER_VISIBILITY_PIXEL);
-
-
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-		D3D12_STATIC_SAMPLER_DESC samplers[2] = { sampler, sampler };
-		samplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		samplers[1].AddressU = samplers[1].AddressV = samplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		samplers[1].ShaderRegister = 1;   // s1
-
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), samplers, rootSignatureFlags);
-
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
-		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
-		ThrowIfFailed(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+		RootSignatureBuilder rs;
+		rs.Table(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, D3D12_SHADER_VISIBILITY_VERTEX,
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE)       // RP_VSConstants
+			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE)       // RP_PSConstants
+			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_Albedo
+			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL,
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_EnvMap
+			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, D3D12_SHADER_VISIBILITY_PIXEL,
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_Irradiance
+			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, D3D12_SHADER_VISIBILITY_PIXEL,
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_Specular
+			.StaticSampler(StaticSamplers::PointBorder(0))
+			.StaticSampler(StaticSamplers::LinearClamp(1))
+			.Flags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+				D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS);
+		assert(rs.ParamCount() == RP_MainCount);     // enum 순서와 추가 순서가 어긋나면 바로 걸림
+		m_rootSignature = rs.Build(m_device.Get(), L"Main RootSig");
 	}
 
 	{
-		auto vs = LoadShader(GetAssetFullPath(L"VertexShader.cso"));
-		auto ps = LoadShader(GetAssetFullPath(L"PixelShader.cso"));
-
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = m_rootSignature.Get();
-		psoDesc.VS = ToBytecode(vs);
-		psoDesc.PS = ToBytecode(ps);
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT); // Depth ON, LESS, Write ALL
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		/*psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;*/
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = kHdrFormat;
-		psoDesc.SampleDesc.Count = 1;
-
-		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+		RootSignatureBuilder rs;
+		rs.Constants(sizeof(PostConstants) / 4, 0, D3D12_SHADER_VISIBILITY_PIXEL)    // PRP_Constants
+			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE)                          // PRP_Source0
+			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL,
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE)                          // PRP_Source1
+			.StaticSampler(StaticSamplers::LinearClamp(0));
+		assert(rs.ParamCount() == PRP_Count);
+		m_postRootSignature = rs.Build(m_device.Get(), L"Post RootSig");
 	}
 
-	// ── 후처리 루트 시그니처 ──
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 r[2];
-		r[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE); // t0
-		r[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE); // t1
+		auto vs = LoadShader(Paths::Shader(L"VertexShader.cso"));
+		auto ps = LoadShader(Paths::Shader(L"PixelShader.cso"));
+		auto skyVs = LoadShader(Paths::Shader(L"CubeMappingVertexShader.cso"));
+		auto skyPs = LoadShader(Paths::Shader(L"CubeMappingPixelShader.cso"));
 
-		CD3DX12_ROOT_PARAMETER1 p[3];
-		p[0].InitAsConstants(sizeof(PostConstants) / 4, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);   // b0
-		p[1].InitAsDescriptorTable(1, &r[0], D3D12_SHADER_VISIBILITY_PIXEL);
-		p[2].InitAsDescriptorTable(1, &r[1], D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pipelineState = PipelineBuilder(m_rootSignature.Get())
+			.VS(vs).PS(ps).InputLayout(kVertexLayout)
+			.RenderTarget(kHdrFormat).DepthFormat(DXGI_FORMAT_D32_FLOAT)
+			.Cull(D3D12_CULL_MODE_NONE)
+			.Build(m_device.Get(), L"Forward PSO");
 
-		D3D12_STATIC_SAMPLER_DESC s = {};
-		s.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;   // 다운/업샘플에 bilinear가 필요
-		s.AddressU = s.AddressV = s.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		s.MaxLOD = D3D12_FLOAT32_MAX;
-		s.ShaderRegister = 0;
-		s.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rs;
-		rs.Init_1_1(_countof(p), p, 1, &s, D3D12_ROOT_SIGNATURE_FLAG_NONE);   // 입력 레이아웃 없음
-
-		ComPtr<ID3DBlob> sig, err;
-		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1_1, &sig, &err));
-		ThrowIfFailed(m_device->CreateRootSignature(0, sig->GetBufferPointer(), sig->GetBufferSize(),
-			IID_PPV_ARGS(&m_postRootSignature)));
+		m_cubeMapPipelineState = PipelineBuilder(m_rootSignature.Get())
+			.VS(skyVs).PS(skyPs).InputLayout(kVertexLayout)
+			.RenderTarget(kHdrFormat).DepthFormat(DXGI_FORMAT_D32_FLOAT)
+			.Cull(D3D12_CULL_MODE_NONE).DepthWrite(false)        // ← 두 PSO의 유일한 차이가 한눈에 보임
+			.Build(m_device.Get(), L"Skybox PSO");
 	}
 
-	// ── 후처리 PSO 3개 ──
 	{
-		auto vs = LoadShader(GetAssetFullPath(L"FullscreenVS.cso"));
-
-		auto makePostPSO = [&](const wchar_t* psFile, DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat,
-			ComPtr<ID3D12PipelineState>& out)
+		auto fullscreenVs = LoadShader(Paths::Shader(L"FullscreenVS.cso"));
+		auto makePost = [&](const wchar_t* psFile, DXGI_FORMAT rtv, DXGI_FORMAT dsv, const wchar_t* name)
 			{
-				auto ps = LoadShader(GetAssetFullPath(psFile));
-
-				D3D12_GRAPHICS_PIPELINE_STATE_DESC d = {};
-				d.pRootSignature = m_postRootSignature.Get();
-				d.VS = ToBytecode(vs);
-				d.PS = ToBytecode(ps);
-				d.InputLayout = { nullptr, 0 };
-				d.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-				d.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-				d.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-				d.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-				d.DepthStencilState.DepthEnable = FALSE;
-				d.DSVFormat = dsvFormat;
-				d.SampleMask = UINT_MAX;
-				d.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-				d.NumRenderTargets = 1;
-				d.RTVFormats[0] = rtvFormat;
-				d.SampleDesc.Count = 1;
-				ThrowIfFailed(m_device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&out)));
+				auto ps = LoadShader(Paths::Shader(psFile));      // Build까지 같은 식 안에서 끝나므로 수명 OK
+				return PipelineBuilder(m_postRootSignature.Get())
+					.VS(fullscreenVs).PS(ps)                       // 입력 레이아웃 없음 (SV_VertexID로 삼각형 생성)
+					.RenderTarget(rtv).DepthFormat(dsv)
+					.Cull(D3D12_CULL_MODE_NONE).DepthTest(false)
+					.Build(m_device.Get(), name);
 			};
-
-		makePostPSO(L"BloomBrightPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, m_brightPSO);
-		makePostPSO(L"BloomBlurPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, m_blurPSO);
-		makePostPSO(L"BloomCombinePS.cso", m_swapChain.Format(), DXGI_FORMAT_D32_FLOAT, m_combinePSO);
-	}
-
-	{
-		auto vs = LoadShader(GetAssetFullPath(L"CubeMappingVertexShader.cso"));
-		auto ps = LoadShader(GetAssetFullPath(L"CubeMappingPixelShader.cso"));
-
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = m_rootSignature.Get();
-		psoDesc.VS = ToBytecode(vs);
-		psoDesc.PS = ToBytecode(ps);
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT); // Depth ON, LESS, Write ALL
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = kHdrFormat;
-		psoDesc.SampleDesc.Count = 1;
-
-		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_cubeMapPipelineState)));
+		m_brightPSO = makePost(L"BloomBrightPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, L"Bloom Bright PSO");
+		m_blurPSO = makePost(L"BloomBlurPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, L"Bloom Blur PSO");
+		m_combinePSO = makePost(L"BloomCombinePS.cso", m_swapChain.Format(), DXGI_FORMAT_D32_FLOAT, L"Combine PSO");
 	}
 
 	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
@@ -483,8 +358,8 @@ void MyEngine::PopulateCommandList()
 	ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Heap()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	m_commandList->SetGraphicsRootDescriptorTable(0, m_vsCbvTable.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(1, m_psCbv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_VSConstants, m_vsCbvTable.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_PSConstants, m_psCbv.gpu);
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -495,30 +370,30 @@ void MyEngine::PopulateCommandList()
 	m_commandList->ClearRenderTargetView(m_sceneColor.rtv.cpu, m_sceneColor.ClearColor(), 0, nullptr);
 	m_commandList->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-	m_commandList->SetGraphicsRootDescriptorTable(3, m_envMap.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(4, m_irradianceMap.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(5, m_specularMap.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_EnvMap, m_envMap.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_Irradiance, m_irradianceMap.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_Specular, m_specularMap.srv.gpu);
 
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
 	// ── 스카이박스 ──
 	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
-	m_commandList->SetGraphicsRootDescriptorTable(0, m_skyboxVsCbvTable.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_VSConstants, m_skyboxVsCbvTable.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, m_envMap.srv.gpu);
 	D3D12_VERTEX_BUFFER_VIEW skyVbv = m_skyboxVB.VertexView();
 	D3D12_INDEX_BUFFER_VIEW  skyIbv = m_skyboxIB.IndexView();
-	m_commandList->SetGraphicsRootDescriptorTable(2, m_envMap.srv.gpu);
 	m_commandList->IASetVertexBuffers(0, 1, &skyVbv);
 	m_commandList->IASetIndexBuffer(&skyIbv);
 	m_commandList->DrawIndexedInstanced(m_skyboxIB.Count(), 1, 0, 0, 0);
 	
 	// ── 모델 ──
 	m_commandList->SetPipelineState(m_pipelineState.Get());
-	m_commandList->SetGraphicsRootDescriptorTable(0, m_vsCbvTable.gpu);   // 원래 VS 상수 버퍼(0,1번 칸)로 복귀
+	m_commandList->SetGraphicsRootDescriptorTable(RP_VSConstants, m_vsCbvTable.gpu);   // 원래 VS 상수 버퍼(0,1번 칸)로 복귀
 	for (const Mesh& mesh : m_meshes) {
 		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
 		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
-		m_commandList->SetGraphicsRootDescriptorTable(2, albedo.srv.gpu);
+		m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, albedo.srv.gpu);
 		m_commandList->IASetVertexBuffers(0, 1, &vbv);
 		m_commandList->IASetIndexBuffer(&ibv);
 		m_commandList->DrawIndexedInstanced(mesh.ib.Count(), 1, 0, 0, 0);
@@ -543,7 +418,7 @@ void MyEngine::PopulateCommandList()
 			m_commandList->OMSetRenderTargets(1, &target.rtv.cpu, FALSE, nullptr);
 			m_commandList->SetPipelineState(pso);
 			m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &c, 0);
-			m_commandList->SetGraphicsRootDescriptorTable(1, src.srv.gpu);
+			m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, src.srv.gpu);
 			m_commandList->DrawInstanced(3, 1, 0, 0);
 			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		};
@@ -579,8 +454,8 @@ void MyEngine::PopulateCommandList()
 	pc.invSize[1] = 1.0f / m_height;
 	m_commandList->SetPipelineState(m_combinePSO.Get());
 	m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &pc, 0);
-	m_commandList->SetGraphicsRootDescriptorTable(1, m_sceneColor.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(2, m_bloom[0].srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, m_sceneColor.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source1, m_bloom[0].srv.gpu);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
 	// ImGui: 박스 다음, Present 배리어 전

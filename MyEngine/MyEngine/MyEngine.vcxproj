@@ -165,6 +165,8 @@
     <ClCompile Include="Engine\RHI\GpuBuffer.cpp" />
     <ClCompile Include="Engine\RHI\GpuResource.cpp" />
     <ClCompile Include="Engine\RHI\GraphicsDevice.cpp" />
+    <ClCompile Include="Engine\RHI\PipelineBuilder.cpp" />
+    <ClCompile Include="Engine\RHI\RootSignatureBuilder.cpp" />
     <ClCompile Include="Engine\RHI\SwapChain.cpp" />
     <ClCompile Include="Engine\RHI\Texture.cpp" />
     <ClCompile Include="GeometryGenerator.cpp" />
@@ -182,6 +184,8 @@
     <ClInclude Include="Engine\RHI\GpuBuffer.h" />
     <ClInclude Include="Engine\RHI\GpuResource.h" />
     <ClInclude Include="Engine\RHI\GraphicsDevice.h" />
+    <ClInclude Include="Engine\RHI\PipelineBuilder.h" />
+    <ClInclude Include="Engine\RHI\RootSignatureBuilder.h" />
     <ClInclude Include="Engine\RHI\SwapChain.h" />
     <ClInclude Include="Engine\RHI\Texture.h" />
     <ClInclude Include="GeometryGenerator.h" />
