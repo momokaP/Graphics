@@ -59,40 +59,6 @@ void DXSample::CopyToBuffer(ID3D12Resource* buffer, const void* data, size_t siz
 	buffer->Unmap(0, nullptr);
 }
 
-VertexBuffer DXSample::CreateVertexBufferRaw(ID3D12Device* device, const void* data, UINT vertexCount, UINT stride)
-{
-	VertexBuffer vertexBuffer;
-	const UINT vertexBufferSize = vertexCount * stride;
-
-	vertexBuffer.resource = CreateUploadBuffer(device, vertexBufferSize);
-	CopyToBuffer(vertexBuffer.resource.Get(), data, vertexBufferSize);
-
-	vertexBuffer.view.BufferLocation = vertexBuffer.resource->GetGPUVirtualAddress();
-	vertexBuffer.view.StrideInBytes = stride;
-	vertexBuffer.view.SizeInBytes = vertexBufferSize;
-
-	return vertexBuffer;
-}
-
-IndexBuffer DXSample::CreateIndexBufferRaw(ID3D12Device* device, const void* data, UINT indexCount, DXGI_FORMAT format)
-{
-	assert(format == DXGI_FORMAT_R16_UINT || format == DXGI_FORMAT_R32_UINT);
-	const UINT stride = (format == DXGI_FORMAT_R16_UINT) ? 2 : 4;
-	const UINT indexBufferSize = indexCount * stride;
-
-	IndexBuffer indexBuffer;
-	indexBuffer.count = indexCount;
-
-	indexBuffer.resource = CreateUploadBuffer(device, indexBufferSize);
-	CopyToBuffer(indexBuffer.resource.Get(), data, indexBufferSize);
-	
-	indexBuffer.view.BufferLocation = indexBuffer.resource->GetGPUVirtualAddress();
-	indexBuffer.view.Format = format;
-	indexBuffer.view.SizeInBytes = indexBufferSize;
-
-	return indexBuffer;
-}
-
 ConstantBuffer DXSample::CreateConstantBufferRaw(ID3D12Device* device, const void* initData, UINT dataSize, D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle)
 {
 	ConstantBuffer constantBuffer;
@@ -102,7 +68,7 @@ ConstantBuffer DXSample::CreateConstantBufferRaw(ID3D12Device* device, const voi
 
 	CD3DX12_RANGE readRange(0, 0);
 	ThrowIfFailed(constantBuffer.resource->Map(0, &readRange, reinterpret_cast<void**>(&constantBuffer.mapped)));
-	memcpy(constantBuffer.mapped, &initData, sizeof(initData));
+	memcpy(constantBuffer.mapped, initData, dataSize);
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 	cbvDesc.BufferLocation = constantBuffer.resource->GetGPUVirtualAddress();

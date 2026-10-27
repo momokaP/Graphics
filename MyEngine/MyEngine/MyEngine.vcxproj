@@ -162,8 +162,11 @@
   <ItemGroup>
     <ClCompile Include="DXSample.cpp" />
     <ClCompile Include="Engine\RHI\DescriptorHeap.cpp" />
+    <ClCompile Include="Engine\RHI\GpuBuffer.cpp" />
+    <ClCompile Include="Engine\RHI\GpuResource.cpp" />
     <ClCompile Include="Engine\RHI\GraphicsDevice.cpp" />
     <ClCompile Include="Engine\RHI\SwapChain.cpp" />
+    <ClCompile Include="Engine\RHI\Texture.cpp" />
     <ClCompile Include="GeometryGenerator.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ModelLoader.cpp" />
@@ -176,8 +179,11 @@
     <ClInclude Include="DXSample.h" />
     <ClInclude Include="DXSampleHelper.h" />
     <ClInclude Include="Engine\RHI\DescriptorHeap.h" />
+    <ClInclude Include="Engine\RHI\GpuBuffer.h" />
+    <ClInclude Include="Engine\RHI\GpuResource.h" />
     <ClInclude Include="Engine\RHI\GraphicsDevice.h" />
     <ClInclude Include="Engine\RHI\SwapChain.h" />
+    <ClInclude Include="Engine\RHI\Texture.h" />
     <ClInclude Include="GeometryGenerator.h" />
     <ClInclude Include="MeshData.h" />
     <ClInclude Include="ModelLoader.h" />

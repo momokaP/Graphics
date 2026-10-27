@@ -50,47 +50,25 @@ void MyEngine::LoadPipeline()
 	m_swapChain.Init(m_gfx, m_rtvHeap, Win32Application::GetHwnd(), scDesc);
 	m_frameIndex = m_swapChain.CurrentIndex();
 
-	m_dsv = m_dsvHeap.Allocate();
-	CreateDepthBuffer(m_width, m_height);
+	m_depth.CreateDepth(m_device.Get(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
 
 	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)));
 }
 
 static const float kSceneClear[4] = { 0.2f, 0.2f, 0.25f, 1.0f };
 
-void MyEngine::CreateRenderTexture(ComPtr<ID3D12Resource>& tex, UINT w, UINT h,
-	const DescriptorHandle& rtv, const DescriptorHandle& srv)
-{
-	D3D12_CLEAR_VALUE clear = {};
-	clear.Format = kHdrFormat;
-	memcpy(clear.Color, kSceneClear, sizeof(kSceneClear));
-
-	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(kHdrFormat, w, h, 1, 1, 1, 0,
-		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
-
-	ThrowIfFailed(m_device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,   // 평소 상태는 SRV, 그릴 때만 RT로 전환
-		&clear, IID_PPV_ARGS(tex.ReleaseAndGetAddressOf())));
-
-	m_device->CreateRenderTargetView(tex.Get(), nullptr, rtv.cpu);
-
-	CreateTextureSrv(tex.Get(), srv.cpu);
-}
-
 void MyEngine::CreatePostTargets(UINT width, UINT height)
 {
-	if (!m_sceneRtv.IsValid())
-	{
-		m_sceneRtv = m_rtvHeap.Allocate();  m_sceneSrv = m_srvHeap.Allocate();
-		for (UINT i = 0; i < 2; ++i) { m_bloomRtv[i] = m_rtvHeap.Allocate(); m_bloomSrv[i] = m_srvHeap.Allocate(); }
-	}
-	CreateRenderTexture(m_sceneColor, width, height, m_sceneRtv, m_sceneSrv);
+	static const float kBlack[4] = { 0, 0, 0, 1 };
+	m_sceneColor.CreateRenderTarget(m_device.Get(), m_rtvHeap, m_srvHeap,
+		width, height, kHdrFormat, kSceneClear, L"SceneColor");
 
 	m_bloomWidth = max(1u, width / 2);
 	m_bloomHeight = max(1u, height / 2);
-	for (UINT i = 0; i < 2; ++i)
-		CreateRenderTexture(m_bloom[i], m_bloomWidth, m_bloomHeight, m_bloomRtv[i], m_bloomSrv[i]);
+	m_bloom[0].CreateRenderTarget(m_device.Get(), m_rtvHeap, m_srvHeap,
+		m_bloomWidth, m_bloomHeight, kHdrFormat, kBlack, L"Bloom[0]");
+	m_bloom[1].CreateRenderTarget(m_device.Get(), m_rtvHeap, m_srvHeap,
+		m_bloomWidth, m_bloomHeight, kHdrFormat, kBlack, L"Bloom[1]");
 }
 
 void MyEngine::LoadAssets()
@@ -298,142 +276,72 @@ void MyEngine::LoadAssets()
 	CreatePostTargets(m_width, m_height);
 
 	{
-		MeshData meshData = GeometryGenerator::MakeBox();
+		DirectX::ResourceUploadBatch upload(m_device.Get());
+		upload.Begin();
 
-		// MeshData meshData = GeometryGenerator::MakeCylinder(1.0f, 1.0f, 1.0f, 10);
-		
-		/*MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
-		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
-		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
-		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);*/
+		// 스카이박스용 박스
+		MeshData box = GeometryGenerator::MakeBox();
+		m_skyboxVB.CreateVertexBuffer(m_device.Get(), upload, box.vertices, L"Skybox VB");
+		m_skyboxIB.CreateIndexBuffer(m_device.Get(), upload, box.indices, L"Skybox IB");
 
-		// MeshData meshData = GeometryGenerator::MakeIcosahedron();
+		// 기본 텍스처
+		m_defaultTexture.LoadWIC(m_device.Get(), upload, Paths::Asset(L"Textures/kotone.png"), true);
 
-		m_vertexBuffer = CreateVertexBuffer(m_device.Get(), meshData.vertices);
-		m_indexBuffer = CreateIndexBuffer(m_device.Get(), meshData.indices);
-		
-		m_vsCbvTable = m_srvHeap.Allocate(2);   // 루트 파라미터 0번 테이블: b0, b1
-		m_constantBuffer = CreateConstantBuffer(m_device.Get(), m_constantBufferData, 
+		// 모델
+		auto meshDatas = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/zaku2/zaku2_1.fbx"));
+		m_meshes.resize(meshDatas.size());     // ⚠ resize 먼저: push_back 중 재할당되면 업로드 대기 중인 리소스 포인터가 꼬일 수 있음
+		for (size_t i = 0; i < meshDatas.size(); ++i)
+		{
+			const MeshData& md = meshDatas[i];
+			Mesh& mesh = m_meshes[i];
+			mesh.vb.CreateVertexBuffer(m_device.Get(), upload, md.vertices, L"Mesh VB");
+			mesh.ib.CreateIndexBuffer(m_device.Get(), upload, md.indices, L"Mesh IB");
+			if (!md.albedoTexturePath.empty() && std::filesystem::exists(md.albedoTexturePath))
+				mesh.albedo.LoadWIC(m_device.Get(), upload, md.albedoTexturePath, true);
+		}
+
+		// IBL 큐브맵
+		const auto ibl = Paths::Asset(L"DayEnvironmentHDRI057Brdf");
+		m_envMap.LoadDDS(m_device.Get(), upload, ibl / L"DayEnvironmentHDRI057EnvHDR.dds");
+		m_irradianceMap.LoadDDS(m_device.Get(), upload, ibl / L"DayEnvironmentHDRI057DiffuseHDR.dds");
+		m_specularMap.LoadDDS(m_device.Get(), upload, ibl / L"DayEnvironmentHDRI057SpecularHDR.dds");
+
+		upload.End(m_commandQueue.Get()).wait();
+
+		// SRV는 업로드가 끝난 뒤 생성
+		m_defaultTexture.CreateSrv(m_device.Get(), m_srvHeap);
+		for (Mesh& mesh : m_meshes)
+			if (mesh.albedo.IsValid()) mesh.albedo.CreateSrv(m_device.Get(), m_srvHeap);
+		m_envMap.CreateSrv(m_device.Get(), m_srvHeap);
+		m_irradianceMap.CreateSrv(m_device.Get(), m_srvHeap);
+		m_specularMap.CreateSrv(m_device.Get(), m_srvHeap);
+	}
+
+	{
+		m_vsCbvTable = m_srvHeap.Allocate(2);   // RP_VSConstants 테이블: b0, b1
+		m_constantBuffer = CreateConstantBuffer(m_device.Get(), m_constantBufferData,
 			m_srvHeap.Cpu(m_vsCbvTable.index + 0));
 		m_BasicVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), m_BasicVertexConstantBufferData,
 			m_srvHeap.Cpu(m_vsCbvTable.index + 1));
 
-		m_psCbv = m_srvHeap.Allocate();
+		m_psCbv = m_srvHeap.Allocate();          // RP_PSConstants 테이블: b0
 		m_BasicPixelConstantBuffer = CreateConstantBuffer(m_device.Get(), m_BasicPixelConstantBufferData,
 			m_psCbv.cpu);
-	}
 
-	// Create the texture.
-	{
-		auto meshDatas = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/zaku2/zaku2_1.fbx"));
-		// auto meshDatas = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/sinanju/sinanju.fbx"));
-
-		/*MeshData meshData = GeometryGenerator::MakeSphere(1.5f, 12, 12);
-		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
-		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
-		meshData = GeometryGenerator::SubdivideToSphere(1.5f, meshData);
-		std::vector<MeshData> meshDatas;
-		meshDatas.push_back(meshData);*/
-
-		/*MeshData meshData = GeometryGenerator::MakeBox();
-		std::vector<MeshData> meshDatas;
-		meshDatas.push_back(meshData);*/
-
-		DirectX::ResourceUploadBatch upload(m_device.Get());
-		upload.Begin();
-
-		// 기본 텍스처
-		ThrowIfFailed(DirectX::CreateWICTextureFromFileEx(m_device.Get(), upload,
-			Paths::Asset(L"Textures/kotone.png").c_str(),
-			0, D3D12_RESOURCE_FLAG_NONE, DirectX::WIC_LOADER_FORCE_SRGB,
-			m_texture.ReleaseAndGetAddressOf()));
-
-		for (const MeshData& md : meshDatas) {
-			Mesh mesh;
-			mesh.vb = CreateVertexBuffer(m_device.Get(), md.vertices);
-			mesh.ib = CreateIndexBuffer(m_device.Get(), md.indices);
-
-			if (!md.albedoTexturePath.empty() && std::filesystem::exists(md.albedoTexturePath)) {
-				if (SUCCEEDED(DirectX::CreateWICTextureFromFileEx(m_device.Get(), upload,
-					md.albedoTexturePath.c_str(),
-					0, D3D12_RESOURCE_FLAG_NONE, DirectX::WIC_LOADER_FORCE_SRGB,
-					mesh.texture.ReleaseAndGetAddressOf()))) {
-					mesh.srv = m_srvHeap.Allocate();
-				}
-			}
-			m_meshes.push_back(std::move(mesh));
-		}
-
-		upload.End(m_commandQueue.Get()).wait();
-
-		// SRV 생성 (업로드가 끝난 뒤 리소스 기준)
-		m_defaultTexSrv = m_srvHeap.Allocate();
-		CreateTextureSrv(m_texture.Get(), m_defaultTexSrv.cpu);
-		for (const Mesh& mesh : m_meshes)
-			if (mesh.texture) CreateTextureSrv(mesh.texture.Get(), mesh.srv.cpu);
-	}
-
-	{
-		ResourceUploadBatch upload(m_device.Get());
-		upload.Begin();
-
-		bool isCubeMap = false;
-		ThrowIfFailed(CreateDDSTextureFromFileEx(
-			m_device.Get(), upload, Paths::Asset(L"DayEnvironmentHDRI057Brdf/DayEnvironmentHDRI057EnvHDR.dds").c_str(),
-			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
-			m_cubeMapTexture.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
-		assert(isCubeMap);
-		isCubeMap = false;
-
-		ThrowIfFailed(CreateDDSTextureFromFileEx(
-			m_device.Get(), upload, Paths::Asset(L"DayEnvironmentHDRI057Brdf/DayEnvironmentHDRI057DiffuseHDR.dds").c_str(),
-			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
-			m_cubeMapTextureDiffuse.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
-		assert(isCubeMap);
-		isCubeMap = false;
-
-		ThrowIfFailed(CreateDDSTextureFromFileEx(
-			m_device.Get(), upload, Paths::Asset(L"DayEnvironmentHDRI057Brdf/DayEnvironmentHDRI057SpecularHDR.dds").c_str(),
-			0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT,
-			m_cubeMapTextureSpecular.ReleaseAndGetAddressOf(), nullptr, &isCubeMap));
-		assert(isCubeMap);
-		isCubeMap = false;
-
-		upload.End(m_commandQueue.Get()).wait();
-		
-		UINT inc = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		
-		m_envSrv = m_srvHeap.Allocate();
-		CreateCubeSrv(m_cubeMapTexture.Get(), m_envSrv.cpu);
-		m_irradianceSrv = m_srvHeap.Allocate();
-		CreateCubeSrv(m_cubeMapTextureDiffuse.Get(), m_irradianceSrv.cpu);
-		m_specularSrv = m_srvHeap.Allocate();
-		CreateCubeSrv(m_cubeMapTextureSpecular.Get(), m_specularSrv.cpu);
-
+		// 스카이박스: b0은 위 m_constantBuffer를 같이 가리키고, b1은 스카이박스 전용
 		m_skyboxVsCbvTable = m_srvHeap.Allocate(2);
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = {};
 		cbv.BufferLocation = m_constantBuffer.resource->GetGPUVirtualAddress();
-		cbv.SizeInBytes = (sizeof(m_constantBufferData) + 255) & ~255;
+		cbv.SizeInBytes = m_constantBuffer.size;
 		m_device->CreateConstantBufferView(&cbv, m_srvHeap.Cpu(m_skyboxVsCbvTable.index + 0));
 
-		m_skyboxVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), 
-			m_skyboxVertexConstantBufferData, m_srvHeap.Cpu(m_skyboxVsCbvTable.index + 1));
+		m_skyboxVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), m_skyboxVertexConstantBufferData,
+			m_srvHeap.Cpu(m_skyboxVsCbvTable.index + 1));
 	}
 
 	{
 		WaitForPreviousFrame();
 	}
-}
-
-void MyEngine::CreateTextureSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE dst)
-{
-	D3D12_RESOURCE_DESC d = tex->GetDesc();
-	D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-	srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srv.Format = d.Format;
-	srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srv.Texture2D.MipLevels = d.MipLevels;
-	m_device->CreateShaderResourceView(tex, &srv, dst);
 }
 
 void MyEngine::InitGUI()
@@ -577,46 +485,47 @@ void MyEngine::PopulateCommandList()
 
 	m_commandList->SetGraphicsRootDescriptorTable(0, m_vsCbvTable.gpu);
 	m_commandList->SetGraphicsRootDescriptorTable(1, m_psCbv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(3, m_envSrv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(4, m_irradianceSrv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(5, m_specularSrv.gpu);
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
-	auto sceneToRT = CD3DX12_RESOURCE_BARRIER::Transition(m_sceneColor.Get(),
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_commandList->ResourceBarrier(1, &sceneToRT);
 
-	m_commandList->OMSetRenderTargets(1, &m_sceneRtv.cpu, FALSE, &m_dsv.cpu);
-	m_commandList->ClearRenderTargetView(m_sceneRtv.cpu, kSceneClear, 0, nullptr);
-	m_commandList->ClearDepthStencilView(m_dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-	
+	m_sceneColor.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList->OMSetRenderTargets(1, &m_sceneColor.rtv.cpu, FALSE, &m_depth.dsv.cpu);
+	m_commandList->ClearRenderTargetView(m_sceneColor.rtv.cpu, m_sceneColor.ClearColor(), 0, nullptr);
+	m_commandList->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+	m_commandList->SetGraphicsRootDescriptorTable(3, m_envMap.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(4, m_irradianceMap.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(5, m_specularMap.srv.gpu);
+
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
 	// ── 스카이박스 ──
 	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
 	m_commandList->SetGraphicsRootDescriptorTable(0, m_skyboxVsCbvTable.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(2, m_envSrv.gpu);
-	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBuffer.view);
-	m_commandList->IASetIndexBuffer(&m_indexBuffer.view);
-	m_commandList->DrawIndexedInstanced(m_indexBuffer.count, 1, 0, 0, 0);
+	D3D12_VERTEX_BUFFER_VIEW skyVbv = m_skyboxVB.VertexView();
+	D3D12_INDEX_BUFFER_VIEW  skyIbv = m_skyboxIB.IndexView();
+	m_commandList->SetGraphicsRootDescriptorTable(2, m_envMap.srv.gpu);
+	m_commandList->IASetVertexBuffers(0, 1, &skyVbv);
+	m_commandList->IASetIndexBuffer(&skyIbv);
+	m_commandList->DrawIndexedInstanced(m_skyboxIB.Count(), 1, 0, 0, 0);
 	
 	// ── 모델 ──
 	m_commandList->SetPipelineState(m_pipelineState.Get());
 	m_commandList->SetGraphicsRootDescriptorTable(0, m_vsCbvTable.gpu);   // 원래 VS 상수 버퍼(0,1번 칸)로 복귀
 	for (const Mesh& mesh : m_meshes) {
-		const DescriptorHandle& tex = mesh.srv.IsValid() ? mesh.srv : m_defaultTexSrv;
-		m_commandList->SetGraphicsRootDescriptorTable(2, tex.gpu);
-		m_commandList->IASetVertexBuffers(0, 1, &mesh.vb.view);
-		m_commandList->IASetIndexBuffer(&mesh.ib.view);
-		m_commandList->DrawIndexedInstanced(mesh.ib.count, 1, 0, 0, 0);
+		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
+		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
+		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
+		m_commandList->SetGraphicsRootDescriptorTable(2, albedo.srv.gpu);
+		m_commandList->IASetVertexBuffers(0, 1, &vbv);
+		m_commandList->IASetIndexBuffer(&ibv);
+		m_commandList->DrawIndexedInstanced(mesh.ib.Count(), 1, 0, 0, 0);
 	}
 
 	// 씬 텍스처: RT → SRV
-	auto sceneToSRV = CD3DX12_RESOURCE_BARRIER::Transition(m_sceneColor.Get(),
-		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	m_commandList->ResourceBarrier(1, &sceneToSRV);
+	m_sceneColor.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	// ── 후처리 공통 설정 ──
 	m_commandList->SetGraphicsRootSignature(m_postRootSignature.Get());   // ⚠ 이전 루트 파라미터는 모두 무효
@@ -628,22 +537,15 @@ void MyEngine::PopulateCommandList()
 	m_commandList->RSSetScissorRects(1, &bloomRect);
 
 	// 블룸 패스 하나: target에 src를 읽어서 그림
-	auto bloomPass = [&](ID3D12PipelineState* pso, UINT targetIdx, D3D12_GPU_DESCRIPTOR_HANDLE srcSrv, const PostConstants& c)
+	auto bloomPass = [&](ID3D12PipelineState* pso, Texture& target, const Texture& src, const PostConstants& c)
 		{
-			ID3D12Resource* target = m_bloom[targetIdx].Get();
-			auto toRT = CD3DX12_RESOURCE_BARRIER::Transition(target,
-				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			m_commandList->ResourceBarrier(1, &toRT);
-			m_commandList->OMSetRenderTargets(1, &m_bloomRtv[targetIdx].cpu, FALSE, nullptr);   // 절반 해상도라 DSV 없음
-
+			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+			m_commandList->OMSetRenderTargets(1, &target.rtv.cpu, FALSE, nullptr);
 			m_commandList->SetPipelineState(pso);
 			m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &c, 0);
-			m_commandList->SetGraphicsRootDescriptorTable(1, srcSrv);
-			m_commandList->DrawInstanced(3, 1, 0, 0);   // 화면 전체를 덮으므로 Clear 불필요
-
-			auto toSRV = CD3DX12_RESOURCE_BARRIER::Transition(target,
-				D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			m_commandList->ResourceBarrier(1, &toSRV);
+			m_commandList->SetGraphicsRootDescriptorTable(1, src.srv.gpu);
+			m_commandList->DrawInstanced(3, 1, 0, 0);
+			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		};
 
 	PostConstants pc = {};
@@ -653,26 +555,21 @@ void MyEngine::PopulateCommandList()
 	pc.strength = m_bloomStrength;
 	pc.exposure = m_exposure;
 
-	// 1) Bright: scene → bloom[0]
-	bloomPass(m_brightPSO.Get(), 0, m_sceneSrv.gpu, pc);
-
-	// 2) Blur: bloom[0] → bloom[1] (X), bloom[1] → bloom[0] (Y)
+	bloomPass(m_brightPSO.Get(), m_bloom[0], m_sceneColor, pc);
 	for (int i = 0; i < m_bloomBlurCount; ++i)
 	{
 		pc.direction[0] = 1.0f; pc.direction[1] = 0.0f;
-		bloomPass(m_blurPSO.Get(), 1, m_bloomSrv[0].gpu, pc);
+		bloomPass(m_blurPSO.Get(), m_bloom[1], m_bloom[0], pc);
 		pc.direction[0] = 0.0f; pc.direction[1] = 1.0f;
-		bloomPass(m_blurPSO.Get(), 0, m_bloomSrv[1].gpu, pc);
+		bloomPass(m_blurPSO.Get(), m_bloom[0], m_bloom[1], pc);
 	}
 
 	// 3) Combine: scene + bloom[0] → 백버퍼
-	ID3D12Resource* backBuffer = m_swapChain.CurrentBackBuffer();
-	auto bbToRT = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer,
-		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_commandList->ResourceBarrier(1, &bbToRT);
-
+	GpuResource& backBuffer = m_swapChain.CurrentBackBuffer();
+	backBuffer.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_swapChain.CurrentRtv();
-	m_commandList->OMSetRenderTargets(1, &rtv, FALSE, &m_dsv.cpu);   // ImGui PSO의 DSV 포맷과 맞춤
+
+	m_commandList->OMSetRenderTargets(1, &rtv, FALSE, &m_depth.dsv.cpu);   // ImGui PSO의 DSV 포맷과 맞춤
 	m_commandList->ClearRenderTargetView(rtv, kSceneClear, 0, nullptr);   // GUI 영역 배경
 
 	m_commandList->RSSetViewports(1, &m_viewport);
@@ -682,16 +579,14 @@ void MyEngine::PopulateCommandList()
 	pc.invSize[1] = 1.0f / m_height;
 	m_commandList->SetPipelineState(m_combinePSO.Get());
 	m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &pc, 0);
-	m_commandList->SetGraphicsRootDescriptorTable(1, m_sceneSrv.gpu);     // t0
-	m_commandList->SetGraphicsRootDescriptorTable(2, m_bloomSrv[0].gpu);     // t1
+	m_commandList->SetGraphicsRootDescriptorTable(1, m_sceneColor.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(2, m_bloom[0].srv.gpu);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
 	// ImGui: 박스 다음, Present 배리어 전
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
 
-	auto toPresent = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer,
-		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	m_commandList->ResourceBarrier(1, &toPresent);
+	backBuffer.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
 
 	ThrowIfFailed(m_commandList->Close());
 }
@@ -700,18 +595,6 @@ void MyEngine::WaitForPreviousFrame()
 {
 	m_gfx.Flush();
 	m_frameIndex = m_swapChain.CurrentIndex();
-}
-
-void MyEngine::CreateCubeSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE dst)
-{
-	D3D12_RESOURCE_DESC d = tex->GetDesc();   // ← 넘겨받은 리소스 자신의 desc
-	D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-	srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srv.Format = d.Format;
-	srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-	srv.TextureCube.MostDetailedMip = 0;
-	srv.TextureCube.MipLevels = UINT(-1);     // 해당 리소스의 모든 밉
-	m_device->CreateShaderResourceView(tex, &srv, dst);
 }
 
 void MyEngine::UpdateGUI() 
@@ -801,31 +684,6 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 	UpdateForSizeChange(width, height); 
 	UpdateSceneViewport();
 
-	m_depthStencil.Reset();
-	CreateDepthBuffer(width, height);
+	m_depth.CreateDepth(m_device.Get(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
 	CreatePostTargets(width, height);
-}
-
-void MyEngine::CreateDepthBuffer(UINT width, UINT height)
-{
-	D3D12_CLEAR_VALUE clearValue = {};
-	clearValue.Format = DXGI_FORMAT_D32_FLOAT;
-	clearValue.DepthStencil.Depth = 1.0f;
-	clearValue.DepthStencil.Stencil = 0;
-
-	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	auto desc = CD3DX12_RESOURCE_DESC::Tex2D(
-		DXGI_FORMAT_D32_FLOAT, width, height, 1, 1, 1, 0,
-		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-
-	ThrowIfFailed(m_device->CreateCommittedResource(
-		&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue,
-		IID_PPV_ARGS(&m_depthStencil)));
-
-	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
-	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-	m_device->CreateDepthStencilView(m_depthStencil.Get(), &dsvDesc,
-		m_dsv.cpu);
 }

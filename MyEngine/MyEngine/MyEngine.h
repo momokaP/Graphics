@@ -5,6 +5,8 @@
 #include "RHI/GraphicsDevice.h"
 #include "RHI/DescriptorHeap.h"
 #include "RHI/SwapChain.h"
+#include "RHI/Texture.h"
+#include "RHI/GpuBuffer.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
 #include <directxtk12/WICTextureLoader.h>
@@ -92,12 +94,15 @@ private:
 	static_assert((sizeof(BasicPixelConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
 	struct Mesh {
-		VertexBuffer           vb;
-		IndexBuffer            ib;
-		ComPtr<ID3D12Resource> texture;
-		DescriptorHandle srv;
+		GpuBuffer vb, ib;
+		Texture   albedo;          // 없으면 IsValid() == false → 기본 텍스처 사용
 	};
 	std::vector<Mesh> m_meshes;
+
+	Texture m_sceneColor, m_bloom[2], m_depth;
+	Texture m_defaultTexture;
+	Texture m_envMap, m_irradianceMap, m_specularMap;
+	GpuBuffer m_skyboxVB, m_skyboxIB;
 
 	CD3DX12_VIEWPORT m_viewport;
 	CD3DX12_RECT m_scissorRect;
@@ -113,30 +118,10 @@ private:
 
 	DescriptorHeap m_rtvHeap, m_dsvHeap, m_srvHeap;   // srv = CBV/SRV/UAV (shader-visible)
 
-	DescriptorHandle m_sceneRtv, m_bloomRtv[2];
-	DescriptorHandle m_dsv;
 
 	DescriptorHandle m_vsCbvTable;                    // VS b0,b1 (2칸 연속)
 	DescriptorHandle m_psCbv;                         // PS b0
 	DescriptorHandle m_skyboxVsCbvTable;              // 스카이박스 VS b0,b1 (2칸 연속)
-	DescriptorHandle m_defaultTexSrv;
-	DescriptorHandle m_envSrv, m_irradianceSrv, m_specularSrv;
-	DescriptorHandle m_sceneSrv, m_bloomSrv[2];
-
-	ComPtr<ID3D12Resource>       m_depthStencil;
-	void CreateDepthBuffer(UINT width, UINT height);
-
-	void CreateTextureSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE dst);
-
-	/*ComPtr<ID3D12Resource> m_vertexBuffer;
-	ComPtr<ID3D12Resource> m_indexBuffer;
-	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW m_indexBufferView;*/
-
-	ComPtr<ID3D12Resource> m_texture;
-
-	VertexBuffer m_vertexBuffer;
-	IndexBuffer m_indexBuffer;
 
 	ConstantBuffer m_constantBuffer;
 	SceneConstantBuffer m_constantBufferData;
@@ -174,19 +159,11 @@ private:
 	void PopulateCommandList();
 	void WaitForPreviousFrame();
 
-	ComPtr<ID3D12Resource> m_cubeMapTexture;
-	ComPtr<ID3D12Resource> m_cubeMapTextureDiffuse;
-	ComPtr<ID3D12Resource> m_cubeMapTextureSpecular;
-
 	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // 같은 구조체 타입
 	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer 반환 타입
 
-	void CreateCubeSrv(ID3D12Resource* tex, D3D12_CPU_DESCRIPTOR_HANDLE dst);
-
 	static constexpr DXGI_FORMAT kHdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
-	ComPtr<ID3D12Resource> m_sceneColor;
-	ComPtr<ID3D12Resource> m_bloom[2];
 	UINT m_bloomWidth = 1, m_bloomHeight = 1;
 
 	ComPtr<ID3D12RootSignature> m_postRootSignature;
@@ -206,7 +183,5 @@ private:
 
 	int   m_bloomBlurCount = 2;
 
-	void CreateRenderTexture(ComPtr<ID3D12Resource>& tex, UINT w, UINT h, 
-		const DescriptorHandle& rtv, const DescriptorHandle& srv);
 	void CreatePostTargets(UINT width, UINT height);
 };

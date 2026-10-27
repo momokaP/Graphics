@@ -3,17 +3,6 @@
 #include "DXSampleHelper.h"
 #include "Win32Application.h"
 
-struct VertexBuffer {
-	ComPtr<ID3D12Resource>   resource;   // 실제 GPU 메모리 (수명 관리)
-	D3D12_VERTEX_BUFFER_VIEW view;       // IASetVertexBuffers에 넘길 것
-};
-
-struct IndexBuffer {
-	ComPtr<ID3D12Resource>  resource;
-	D3D12_INDEX_BUFFER_VIEW view;
-	UINT                    count;       // DrawIndexedInstanced에 필요
-};
-
 struct ConstantBuffer
 {
 	ComPtr<ID3D12Resource> resource;   // GPU 메모리 (수명 관리)
@@ -53,26 +42,7 @@ protected:
 	ComPtr<ID3D12Resource> CreateUploadBuffer(ID3D12Device* device, UINT64 sizeInBytes);
 	void CopyToBuffer(ID3D12Resource* buffer, const void* data, size_t sizeInBytes);  // Map-memcpy-Unmap
 
-	VertexBuffer CreateVertexBufferRaw(ID3D12Device* device, const void* data, UINT vertexCount, UINT stride);
-	IndexBuffer  CreateIndexBufferRaw(ID3D12Device* device, const void* data, UINT indexCount, DXGI_FORMAT format);
 	ConstantBuffer CreateConstantBufferRaw(ID3D12Device* device, const void* initData, UINT dataSize, D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle);
-
-	template<typename TVertex>
-	VertexBuffer CreateVertexBuffer(ID3D12Device* device, const std::vector<TVertex>& vertices)
-	{
-		return CreateVertexBufferRaw(device, vertices.data(),
-			static_cast<UINT>(vertices.size()), sizeof(TVertex));
-	}
-
-	template<typename TIndex>
-	IndexBuffer CreateIndexBuffer(ID3D12Device* device, const std::vector<TIndex>& indices)
-	{
-		static_assert(sizeof(TIndex) == 2 || sizeof(TIndex) == 4, "Index must be 16 or 32 bit");
-		constexpr DXGI_FORMAT format = (sizeof(TIndex) == 2) ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-
-		return CreateIndexBufferRaw(device, indices.data(),
-			static_cast<UINT>(indices.size()), format);
-	}
 
 	template<typename TConst>
 	ConstantBuffer CreateConstantBuffer(ID3D12Device* device, const TConst& initData,

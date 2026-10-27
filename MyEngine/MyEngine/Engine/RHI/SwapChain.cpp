@@ -56,11 +56,13 @@ void SwapChain::CreateRtvs()
 {
     for (UINT i = 0; i < m_bufferCount; ++i)
     {
-        ThrowIfFailed(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_buffers[i])));
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+        ThrowIfFailed(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&buffer)));
+        m_buffers[i].Attach(buffer, D3D12_RESOURCE_STATE_PRESENT);   // 스왑체인 버퍼는 PRESENT로 시작
 
         wchar_t name[32];
-        swprintf_s(name, L"BackBuffer[%u]", i);   // PIX, 디버그 레이어 메시지에 이 이름이 표시됨
-        m_buffers[i]->SetName(name);
+        swprintf_s(name, L"BackBuffer[%u]", i);
+        m_buffers[i].SetName(name);
 
         m_device->CreateRenderTargetView(m_buffers[i].Get(), nullptr, m_rtvHeap->Cpu(m_rtvs.index + i));
     }
@@ -71,7 +73,7 @@ void SwapChain::Resize(UINT width, UINT height)
     if (width == 0 || height == 0) return;
 
     for (auto& buffer : m_buffers)
-        buffer.Reset();                   // 참조가 하나라도 남아 있으면 ResizeBuffers가 실패
+        buffer.Reset();                 // 참조가 하나라도 남아 있으면 ResizeBuffers가 실패
 
     ThrowIfFailed(m_swapChain->ResizeBuffers(m_bufferCount, width, height, m_format, m_flags));
     m_width = width;

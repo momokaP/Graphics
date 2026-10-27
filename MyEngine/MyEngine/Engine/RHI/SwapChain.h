@@ -4,6 +4,7 @@
 #include <wrl.h>
 #include <vector>
 #include "RHI/DescriptorHeap.h"
+#include "RHI/GpuResource.h"
 
 class GraphicsDevice;
 
@@ -26,7 +27,7 @@ public:
     bool IsValid() const { return m_swapChain != nullptr; }
 
     UINT CurrentIndex() const { return m_swapChain->GetCurrentBackBufferIndex(); }
-    ID3D12Resource* CurrentBackBuffer() const { return m_buffers[CurrentIndex()].Get(); }
+    GpuResource& CurrentBackBuffer() { return m_buffers[CurrentIndex()]; } 
     D3D12_CPU_DESCRIPTOR_HANDLE CurrentRtv() const { return m_rtvHeap->Cpu(m_rtvs.index + CurrentIndex()); }
 
     DXGI_FORMAT Format() const { return m_format; }
@@ -39,7 +40,7 @@ private:
     void CreateRtvs();    // Init과 Resize가 같이 사용 → 중복 루프 제거
 
     Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_buffers;
+    std::vector<GpuResource> m_buffers;
 
     ID3D12Device* m_device = nullptr;
     DescriptorHeap* m_rtvHeap = nullptr;
