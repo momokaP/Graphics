@@ -20,6 +20,7 @@ void GpuResource::SetName(const wchar_t* name)
 
 void GpuResource::Transition(ID3D12GraphicsCommandList* cmd, D3D12_RESOURCE_STATES newState)
 {
+    assert(m_resource && "Transition on empty resource");
     if (m_state == newState) return;
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_resource.Get(), m_state, newState);
     cmd->ResourceBarrier(1, &barrier);

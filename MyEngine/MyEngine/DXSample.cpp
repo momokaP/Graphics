@@ -31,53 +31,6 @@ void DXSample::SetCustomWindowText(LPCWSTR text)
 	SetWindowText(Win32Application::GetHwnd(), windowText.c_str());
 }
 
-ComPtr<ID3D12Resource> DXSample::CreateUploadBuffer(ID3D12Device* device, UINT64 sizeInBytes)
-{
-	ComPtr<ID3D12Resource> buffer;
-	
-	CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
-	CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeInBytes);
-
-	ThrowIfFailed(device->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&bufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&buffer)
-	));
-
-	return buffer;
-}
-
-void DXSample::CopyToBuffer(ID3D12Resource* buffer, const void* data, size_t sizeInBytes)
-{
-	UINT8* pDataBegin;
-	CD3DX12_RANGE readRange(0, 0);
-	ThrowIfFailed(buffer->Map(0, &readRange, reinterpret_cast<void**>(&pDataBegin)));
-	memcpy(pDataBegin, data, sizeInBytes);
-	buffer->Unmap(0, nullptr);
-}
-
-ConstantBuffer DXSample::CreateConstantBufferRaw(ID3D12Device* device, const void* initData, UINT dataSize, D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle)
-{
-	ConstantBuffer constantBuffer;
-	
-	constantBuffer.size = CalculateConstantBufferByteSize(dataSize);
-	constantBuffer.resource = CreateUploadBuffer(device, constantBuffer.size);
-
-	CD3DX12_RANGE readRange(0, 0);
-	ThrowIfFailed(constantBuffer.resource->Map(0, &readRange, reinterpret_cast<void**>(&constantBuffer.mapped)));
-	memcpy(constantBuffer.mapped, initData, dataSize);
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = constantBuffer.resource->GetGPUVirtualAddress();
-	cbvDesc.SizeInBytes = constantBuffer.size;
-	device->CreateConstantBufferView(&cbvDesc, cbvHandle);
-
-	return constantBuffer;
-}
-
 _Use_decl_annotations_
 void DXSample::ParseCommandLineArgs(WCHAR* argv[], int argc)
 {

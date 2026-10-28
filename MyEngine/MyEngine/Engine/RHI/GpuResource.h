@@ -5,7 +5,13 @@
 class GpuResource
 {
 public:
+    GpuResource() = default;
     virtual ~GpuResource() = default;
+
+    GpuResource(const GpuResource&) = delete;              // 복사 금지: 상태가 둘로 갈라짐
+    GpuResource& operator=(const GpuResource&) = delete;
+    GpuResource(GpuResource&&) = default;                  // 이동은 허용: vector<Mesh>, vector<GpuResource>에 필요
+    GpuResource& operator=(GpuResource&&) = default;
 
     ID3D12Resource* Get() const { return m_resource.Get(); }
     D3D12_RESOURCE_STATES State() const { return m_state; }

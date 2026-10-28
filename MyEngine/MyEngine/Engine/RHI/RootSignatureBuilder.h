@@ -4,9 +4,15 @@
 #include <vector>
 #include <deque>
 
+#include "include/d3dx12/d3dx12.h"
+
 class RootSignatureBuilder
 {
 public:
+    RootSignatureBuilder() = default;
+    RootSignatureBuilder(const RootSignatureBuilder&) = delete;            // m_params가 m_ranges 주소를 들고 있음
+    RootSignatureBuilder& operator=(const RootSignatureBuilder&) = delete;
+
     // 디스크립터 테이블 (범위 1개짜리)
     RootSignatureBuilder& Table(D3D12_DESCRIPTOR_RANGE_TYPE type, UINT numDescriptors, UINT baseRegister,
         D3D12_SHADER_VISIBILITY visibility,

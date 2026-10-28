@@ -3,13 +3,6 @@
 #include "DXSampleHelper.h"
 #include "Win32Application.h"
 
-struct ConstantBuffer
-{
-	ComPtr<ID3D12Resource> resource;   // GPU 메모리 (수명 관리)
-	UINT8* mapped = nullptr;           // CPU에서 쓸 주소 (계속 매핑된 상태)
-	UINT   size = 0;                   // 256 정렬된 실제 버퍼 크기
-};
-
 class DXSample
 {
 public:
@@ -38,18 +31,6 @@ protected:
 	std::wstring GetAssetFullPath(LPCWSTR assetName);
 
 	void SetCustomWindowText(LPCWSTR text);
-
-	ComPtr<ID3D12Resource> CreateUploadBuffer(ID3D12Device* device, UINT64 sizeInBytes);
-	void CopyToBuffer(ID3D12Resource* buffer, const void* data, size_t sizeInBytes);  // Map-memcpy-Unmap
-
-	ConstantBuffer CreateConstantBufferRaw(ID3D12Device* device, const void* initData, UINT dataSize, D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle);
-
-	template<typename TConst>
-	ConstantBuffer CreateConstantBuffer(ID3D12Device* device, const TConst& initData,
-		D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle)
-	{
-		return CreateConstantBufferRaw(device, &initData, sizeof(TConst), cbvHandle);
-	}
 
 	void UpdateForSizeChange(UINT clientWidth, UINT clientHeight)
 	{

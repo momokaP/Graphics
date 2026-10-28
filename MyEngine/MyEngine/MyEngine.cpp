@@ -7,7 +7,6 @@ MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
-	m_constantBufferData(),
 	m_BasicVertexConstantBufferData(),
 	m_BasicPixelConstantBufferData()
 {
@@ -75,12 +74,10 @@ void MyEngine::LoadAssets()
 {
 	{
 		RootSignatureBuilder rs;
-		rs.Table(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 2, 0, D3D12_SHADER_VISIBILITY_VERTEX,
-			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE)       // RP_VSConstants
-			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE)       // RP_PSConstants
+		rs.CBV(1, D3D12_SHADER_VISIBILITY_VERTEX)                              // RP_VSConstants (b1)
+			.CBV(0, D3D12_SHADER_VISIBILITY_PIXEL)                               // RP_PSConstants (b0)
 			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_Albedo
+				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                      // RP_Albedo
 			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL,
 				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_EnvMap
 			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, D3D12_SHADER_VISIBILITY_PIXEL,
@@ -164,7 +161,7 @@ void MyEngine::LoadAssets()
 
 		// 모델
 		auto meshDatas = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/zaku2/zaku2_1.fbx"));
-		m_meshes.resize(meshDatas.size());     // ⚠ resize 먼저: push_back 중 재할당되면 업로드 대기 중인 리소스 포인터가 꼬일 수 있음
+		m_meshes.resize(meshDatas.size());     // 크기를 미리 확정해 재할당 방지
 		for (size_t i = 0; i < meshDatas.size(); ++i)
 		{
 			const MeshData& md = meshDatas[i];
@@ -193,25 +190,10 @@ void MyEngine::LoadAssets()
 	}
 
 	{
-		m_vsCbvTable = m_srvHeap.Allocate(2);   // RP_VSConstants 테이블: b0, b1
-		m_constantBuffer = CreateConstantBuffer(m_device.Get(), m_constantBufferData,
-			m_srvHeap.Cpu(m_vsCbvTable.index + 0));
-		m_BasicVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), m_BasicVertexConstantBufferData,
-			m_srvHeap.Cpu(m_vsCbvTable.index + 1));
-
-		m_psCbv = m_srvHeap.Allocate();          // RP_PSConstants 테이블: b0
-		m_BasicPixelConstantBuffer = CreateConstantBuffer(m_device.Get(), m_BasicPixelConstantBufferData,
-			m_psCbv.cpu);
-
-		// 스카이박스: b0은 위 m_constantBuffer를 같이 가리키고, b1은 스카이박스 전용
-		m_skyboxVsCbvTable = m_srvHeap.Allocate(2);
-		D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = {};
-		cbv.BufferLocation = m_constantBuffer.resource->GetGPUVirtualAddress();
-		cbv.SizeInBytes = m_constantBuffer.size;
-		m_device->CreateConstantBufferView(&cbv, m_srvHeap.Cpu(m_skyboxVsCbvTable.index + 0));
-
-		m_skyboxVertexConstantBuffer = CreateConstantBuffer(m_device.Get(), m_skyboxVertexConstantBufferData,
-			m_srvHeap.Cpu(m_skyboxVsCbvTable.index + 1));
+		// 상수 버퍼: 프레임별 영역을 가진 UPLOAD 버퍼 (디스크립터 없음 → 루트 CBV로 바인딩)
+		m_vsCB.Init(m_device.Get(), FrameCount, L"VS Constants");
+		m_skyboxVsCB.Init(m_device.Get(), FrameCount, L"Skybox VS Constants");
+		m_psCB.Init(m_device.Get(), FrameCount, L"PS Constants");
 	}
 
 	{
@@ -297,7 +279,7 @@ void MyEngine::OnUpdate(float dt)
 	m_BasicVertexConstantBufferData.projection =
 		m_BasicVertexConstantBufferData.projection.Transpose();
 
-	memcpy(m_BasicVertexConstantBuffer.mapped, &m_BasicVertexConstantBufferData, sizeof(m_BasicVertexConstantBufferData));
+	m_vsCB.Write(m_frameIndex, m_BasicVertexConstantBufferData);
 
 	m_BasicPixelConstantBufferData.material.diffuse =
 		Vector3(m_materialDiffuse);
@@ -315,13 +297,12 @@ void MyEngine::OnUpdate(float dt)
 		}
 	}
 
-	memcpy(m_BasicPixelConstantBuffer.mapped, &m_BasicPixelConstantBufferData, sizeof(m_BasicPixelConstantBufferData));
+	m_psCB.Write(m_frameIndex, m_BasicPixelConstantBufferData);
 
 	m_skyboxVertexConstantBufferData = m_BasicVertexConstantBufferData;
 	m_skyboxVertexConstantBufferData.model = Matrix::CreateScale(20.0f).Transpose();
 	m_skyboxVertexConstantBufferData.invTranspose = Matrix();  // 스카이박스는 노멀 안 씀
-	memcpy(m_skyboxVertexConstantBuffer.mapped, &m_skyboxVertexConstantBufferData,
-		sizeof(m_skyboxVertexConstantBufferData));
+	m_skyboxVsCB.Write(m_frameIndex, m_skyboxVertexConstantBufferData);
 }
 
 void MyEngine::OnRender()
@@ -358,8 +339,7 @@ void MyEngine::PopulateCommandList()
 	ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Heap()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	m_commandList->SetGraphicsRootDescriptorTable(RP_VSConstants, m_vsCbvTable.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(RP_PSConstants, m_psCbv.gpu);
+	m_commandList->SetGraphicsRootConstantBufferView(RP_PSConstants, m_psCB.GpuAddress(m_frameIndex));
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -378,7 +358,7 @@ void MyEngine::PopulateCommandList()
 	
 	// ── 스카이박스 ──
 	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
-	m_commandList->SetGraphicsRootDescriptorTable(RP_VSConstants, m_skyboxVsCbvTable.gpu);
+	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_skyboxVsCB.GpuAddress(m_frameIndex));
 	m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, m_envMap.srv.gpu);
 	D3D12_VERTEX_BUFFER_VIEW skyVbv = m_skyboxVB.VertexView();
 	D3D12_INDEX_BUFFER_VIEW  skyIbv = m_skyboxIB.IndexView();
@@ -388,8 +368,7 @@ void MyEngine::PopulateCommandList()
 	
 	// ── 모델 ──
 	m_commandList->SetPipelineState(m_pipelineState.Get());
-	m_commandList->SetGraphicsRootDescriptorTable(RP_VSConstants, m_vsCbvTable.gpu);   // 원래 VS 상수 버퍼(0,1번 칸)로 복귀
-	for (const Mesh& mesh : m_meshes) {
+	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_vsCB.GpuAddress(m_frameIndex));	for (const Mesh& mesh : m_meshes) {
 		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
 		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
@@ -417,7 +396,7 @@ void MyEngine::PopulateCommandList()
 			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 			m_commandList->OMSetRenderTargets(1, &target.rtv.cpu, FALSE, nullptr);
 			m_commandList->SetPipelineState(pso);
-			m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &c, 0);
+			m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, sizeof(PostConstants) / 4, &c, 0);
 			m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, src.srv.gpu);
 			m_commandList->DrawInstanced(3, 1, 0, 0);
 			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -453,7 +432,7 @@ void MyEngine::PopulateCommandList()
 	pc.invSize[0] = 1.0f / m_width;
 	pc.invSize[1] = 1.0f / m_height;
 	m_commandList->SetPipelineState(m_combinePSO.Get());
-	m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(PostConstants) / 4, &pc, 0);
+	m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, sizeof(PostConstants) / 4, &pc, 0);
 	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, m_sceneColor.srv.gpu);
 	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source1, m_bloom[0].srv.gpu);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
@@ -553,7 +532,7 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 
 	// 1. GPU가 현재 백버퍼를 다 쓸 때까지 대기
 	WaitForPreviousFrame();
-	m_swapChain.Resize(width, height);;
+	m_swapChain.Resize(width, height);
 	m_frameIndex = m_swapChain.CurrentIndex();
 
 	UpdateForSizeChange(width, height); 

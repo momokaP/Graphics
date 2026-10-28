@@ -1,9 +1,3 @@
-cbuffer SceneConstanctBuffer : register(b0)
-{
-    float4 offset;
-    float4 padding[15];
-};
-
 cbuffer BasicVertexConstantBuffer : register(b1)
 {
     float4x4 model;

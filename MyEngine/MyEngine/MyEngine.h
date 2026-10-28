@@ -9,10 +9,9 @@
 #include "RHI/GpuBuffer.h"
 #include "RHI/RootSignatureBuilder.h"
 #include "RHI/PipelineBuilder.h"
+#include "RHI/FrameConstantBuffer.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
-#include <directxtk12/WICTextureLoader.h>
-#include <directxtk12/DDSTextureLoader.h>
 
 #include "Vertex.h"
 #include "Paths.h"
@@ -42,13 +41,6 @@ public:
 
 private:
 	static const UINT FrameCount = 2;
-
-	struct SceneConstantBuffer
-	{
-		XMFLOAT4 offset;
-		float padding[60]; // Padding so the constant buffer is 256-byte aligned.
-	};
-	static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
 	struct BasicVertexConstantBuffer
 	{
@@ -120,18 +112,12 @@ private:
 
 	DescriptorHeap m_rtvHeap, m_dsvHeap, m_srvHeap;   // srv = CBV/SRV/UAV (shader-visible)
 
+	FrameConstantBuffer<BasicVertexConstantBuffer> m_vsCB;
+	FrameConstantBuffer<BasicVertexConstantBuffer> m_skyboxVsCB;
+	FrameConstantBuffer<BasicPixelConstantBuffer>  m_psCB;
 
-	DescriptorHandle m_vsCbvTable;                    // VS b0,b1 (2칸 연속)
-	DescriptorHandle m_psCbv;                         // PS b0
-	DescriptorHandle m_skyboxVsCbvTable;              // 스카이박스 VS b0,b1 (2칸 연속)
-
-	ConstantBuffer m_constantBuffer;
-	SceneConstantBuffer m_constantBufferData;
-
-	ConstantBuffer m_BasicVertexConstantBuffer;
 	BasicVertexConstantBuffer m_BasicVertexConstantBufferData;
 
-	ConstantBuffer m_BasicPixelConstantBuffer;
 	BasicPixelConstantBuffer m_BasicPixelConstantBufferData;
 
 	int m_lightType = 0;
@@ -162,7 +148,6 @@ private:
 	void WaitForPreviousFrame();
 
 	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // 같은 구조체 타입
-	ConstantBuffer m_skyboxVertexConstantBuffer;                 // CreateConstantBuffer 반환 타입
 
 	static constexpr DXGI_FORMAT kHdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
@@ -179,6 +164,9 @@ private:
 		float exposure;
 		float pad;
 	};
+	static_assert(sizeof(PostConstants) % 4 == 0, "Root constants must be 32-bit aligned");
+	static constexpr UINT kPostConstantCount = sizeof(PostConstants) / 4;
+
 	float m_bloomThreshold = 1.0f;
 	float m_bloomStrength = 0.1f;
 	float m_exposure = 1.0f;
@@ -186,12 +174,12 @@ private:
 	int   m_bloomBlurCount = 2;
 
 	enum MainRootParam : UINT {
-		RP_VSConstants = 0,   // VS b0, b1
-		RP_PSConstants,       // PS b0
-		RP_Albedo,            // t0
-		RP_EnvMap,            // t1
-		RP_Irradiance,        // t2
-		RP_Specular,          // t3
+		RP_VSConstants = 0,   // 루트 CBV: VS b1 (BasicVertexConstantBuffer)
+		RP_PSConstants,       // 루트 CBV: PS b0 (BasicPixelConstantBuffer)
+		RP_Albedo,            // 테이블: t0
+		RP_EnvMap,            // 테이블: t1
+		RP_Irradiance,        // 테이블: t2
+		RP_Specular,          // 테이블: t3
 		RP_MainCount
 	};
 	enum PostRootParam : UINT {
