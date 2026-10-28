@@ -180,6 +180,7 @@
   <ItemGroup>
     <ClInclude Include="DXSample.h" />
     <ClInclude Include="DXSampleHelper.h" />
+    <ClInclude Include="Engine\RHI\DeferredReleaseQueue.h" />
     <ClInclude Include="Engine\RHI\DescriptorHeap.h" />
     <ClInclude Include="Engine\RHI\FrameConstantBuffer.h" />
     <ClInclude Include="Engine\RHI\GpuBuffer.h" />

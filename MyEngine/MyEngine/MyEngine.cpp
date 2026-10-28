@@ -5,7 +5,6 @@
 
 MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 	DXSample(width, height, name),
-	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
 	m_BasicVertexConstantBufferData(),
@@ -103,7 +102,7 @@ void MyEngine::LoadAssets()
 
 	{
 		RootSignatureBuilder rs;
-		rs.Constants(sizeof(PostConstants) / 4, 0, D3D12_SHADER_VISIBILITY_PIXEL)    // PRP_Constants
+		rs.Constants(kPostConstantCount, 0, D3D12_SHADER_VISIBILITY_PIXEL)    // PRP_Constants
 			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
 				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE)                          // PRP_Source0
 			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL,
@@ -328,7 +327,8 @@ void MyEngine::OnRender()
 void MyEngine::OnDestroy()
 {
 	WaitForGpuIdle();
-
+	m_releaseQueue.Flush();
+	
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
@@ -378,7 +378,8 @@ void MyEngine::PopulateCommandList()
 	
 	// ── 모델 ──
 	m_commandList->SetPipelineState(m_pipelineState.Get());
-	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_vsCB.GpuAddress(m_frameIndex));	for (const Mesh& mesh : m_meshes) {
+	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_vsCB.GpuAddress(m_frameIndex));
+	for (const Mesh& mesh : m_meshes) {
 		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
 		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
@@ -406,7 +407,7 @@ void MyEngine::PopulateCommandList()
 			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 			m_commandList->OMSetRenderTargets(1, &target.rtv.cpu, FALSE, nullptr);
 			m_commandList->SetPipelineState(pso);
-			m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, sizeof(PostConstants) / 4, &c, 0);
+			m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, kPostConstantCount, &c, 0);
 			m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, src.srv.gpu);
 			m_commandList->DrawInstanced(3, 1, 0, 0);
 			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -442,7 +443,7 @@ void MyEngine::PopulateCommandList()
 	pc.invSize[0] = 1.0f / m_width;
 	pc.invSize[1] = 1.0f / m_height;
 	m_commandList->SetPipelineState(m_combinePSO.Get());
-	m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, sizeof(PostConstants) / 4, &pc, 0);
+	m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, kPostConstantCount, &pc, 0);
 	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, m_sceneColor.srv.gpu);
 	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source1, m_bloom[0].srv.gpu);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
@@ -453,12 +454,6 @@ void MyEngine::PopulateCommandList()
 	backBuffer.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
 
 	ThrowIfFailed(m_commandList->Close());
-}
-
-void MyEngine::WaitForPreviousFrame()
-{
-	m_gfx.Flush();
-	m_frameIndex = m_swapChain.CurrentIndex();
 }
 
 void MyEngine::MoveToNextFrame()
@@ -475,6 +470,8 @@ void MyEngine::MoveToNextFrame()
 	m_gfx.WaitForFence(m_frames[m_frameIndex].fenceValue);
 	const auto t1 = std::chrono::high_resolution_clock::now();
 	m_lastGpuWaitMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+	
+	m_releaseQueue.Collect(m_gfx.CompletedValue());
 }
 
 void MyEngine::WaitForGpuIdle()

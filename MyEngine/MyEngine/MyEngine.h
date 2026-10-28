@@ -10,6 +10,7 @@
 #include "RHI/RootSignatureBuilder.h"
 #include "RHI/PipelineBuilder.h"
 #include "RHI/FrameConstantBuffer.h"
+#include "RHI/DeferredReleaseQueue.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
 
@@ -155,7 +156,6 @@ private:
 	void LoadPipeline();
 	void LoadAssets();
 	void PopulateCommandList();
-	void WaitForPreviousFrame();
 
 	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // 같은 구조체 타입
 
@@ -200,4 +200,7 @@ private:
 	};
 
 	void CreatePostTargets(UINT width, UINT height);
+
+	DeferredReleaseQueue m_releaseQueue;
+
 };
