@@ -165,6 +165,7 @@
     <ClCompile Include="Engine\RHI\GpuBuffer.cpp" />
     <ClCompile Include="Engine\RHI\GpuResource.cpp" />
     <ClCompile Include="Engine\RHI\GraphicsDevice.cpp" />
+    <ClCompile Include="Engine\RHI\LinearUploadAllocator.cpp" />
     <ClCompile Include="Engine\RHI\PipelineBuilder.cpp" />
     <ClCompile Include="Engine\RHI\RootSignatureBuilder.cpp" />
     <ClCompile Include="Engine\RHI\SwapChain.cpp" />
@@ -182,10 +183,10 @@
     <ClInclude Include="DXSampleHelper.h" />
     <ClInclude Include="Engine\RHI\DeferredReleaseQueue.h" />
     <ClInclude Include="Engine\RHI\DescriptorHeap.h" />
-    <ClInclude Include="Engine\RHI\FrameConstantBuffer.h" />
     <ClInclude Include="Engine\RHI\GpuBuffer.h" />
     <ClInclude Include="Engine\RHI\GpuResource.h" />
     <ClInclude Include="Engine\RHI\GraphicsDevice.h" />
+    <ClInclude Include="Engine\RHI\LinearUploadAllocator.h" />
     <ClInclude Include="Engine\RHI\PipelineBuilder.h" />
     <ClInclude Include="Engine\RHI\RootSignatureBuilder.h" />
     <ClInclude Include="Engine\RHI\SwapChain.h" />

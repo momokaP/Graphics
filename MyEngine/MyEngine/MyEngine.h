@@ -9,8 +9,8 @@
 #include "RHI/GpuBuffer.h"
 #include "RHI/RootSignatureBuilder.h"
 #include "RHI/PipelineBuilder.h"
-#include "RHI/FrameConstantBuffer.h"
 #include "RHI/DeferredReleaseQueue.h"
+#include "RHI/LinearUploadAllocator.h"
 
 #include <directxtk12/ResourceUploadBatch.h>
 
@@ -103,18 +103,13 @@ private:
 	CD3DX12_RECT m_scissorRect;
 	SwapChain m_swapChain;
 	bool m_vsync = true;
-	ComPtr<ID3D12Device> m_device;
-	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 	ComPtr<ID3D12PipelineState> m_cubeMapPipelineState;
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
+	LinearUploadAllocator m_uploadAlloc;
 
 	DescriptorHeap m_rtvHeap, m_dsvHeap, m_srvHeap;   // srv = CBV/SRV/UAV (shader-visible)
-
-	FrameConstantBuffer<BasicVertexConstantBuffer> m_vsCB;
-	FrameConstantBuffer<BasicVertexConstantBuffer> m_skyboxVsCB;
-	FrameConstantBuffer<BasicPixelConstantBuffer>  m_psCB;
 
 	BasicVertexConstantBuffer m_BasicVertexConstantBufferData;
 

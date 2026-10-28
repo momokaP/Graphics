@@ -69,6 +69,9 @@
     <ClCompile Include="Engine\RHI\PipelineBuilder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\RHI\LinearUploadAllocator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -125,10 +128,10 @@
     <ClInclude Include="Engine\RHI\PipelineBuilder.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\RHI\FrameConstantBuffer.h">
+    <ClInclude Include="Engine\RHI\DeferredReleaseQueue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\RHI\DeferredReleaseQueue.h">
+    <ClInclude Include="Engine\RHI\LinearUploadAllocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -34,12 +34,12 @@ void MyEngine::UpdateSceneViewport()
 void MyEngine::LoadPipeline()
 {
 	m_gfx.Init(m_useWarpDevice);
-	m_device = m_gfx.Device();
-	m_commandQueue = m_gfx.Queue();
+	m_gfx.Device();
+	m_gfx.Queue();
 
-	m_rtvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false, L"RTV Heap");
-	m_dsvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 4, false, L"DSV Heap");
-	m_srvHeap.Init(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, true, L"CBV/SRV Heap");
+	m_rtvHeap.Init(m_gfx.Device(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false, L"RTV Heap");
+	m_dsvHeap.Init(m_gfx.Device(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 4, false, L"DSV Heap");
+	m_srvHeap.Init(m_gfx.Device(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, true, L"CBV/SRV Heap");
 
 	SwapChain::Desc scDesc;
 	scDesc.width = m_width;
@@ -48,11 +48,11 @@ void MyEngine::LoadPipeline()
 	scDesc.format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	m_swapChain.Init(m_gfx, m_rtvHeap, Win32Application::GetHwnd(), scDesc);
 
-	m_depth.CreateDepth(m_device.Get(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
+	m_depth.CreateDepth(m_gfx.Device(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
 
 	for (UINT i = 0; i < FrameCount; ++i)
 	{
-		ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+		ThrowIfFailed(m_gfx.Device()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
 			IID_PPV_ARGS(&m_frames[i].allocator)));
 		wchar_t name[32];
 		swprintf_s(name, L"CommandAllocator[%u]", i);
@@ -65,14 +65,14 @@ static const float kSceneClear[4] = { 0.2f, 0.2f, 0.25f, 1.0f };
 void MyEngine::CreatePostTargets(UINT width, UINT height)
 {
 	static const float kBlack[4] = { 0, 0, 0, 1 };
-	m_sceneColor.CreateRenderTarget(m_device.Get(), m_rtvHeap, m_srvHeap,
+	m_sceneColor.CreateRenderTarget(m_gfx.Device(), m_rtvHeap, m_srvHeap,
 		width, height, kHdrFormat, kSceneClear, L"SceneColor");
 
 	m_bloomWidth = max(1u, width / 2);
 	m_bloomHeight = max(1u, height / 2);
-	m_bloom[0].CreateRenderTarget(m_device.Get(), m_rtvHeap, m_srvHeap,
+	m_bloom[0].CreateRenderTarget(m_gfx.Device(), m_rtvHeap, m_srvHeap,
 		m_bloomWidth, m_bloomHeight, kHdrFormat, kBlack, L"Bloom[0]");
-	m_bloom[1].CreateRenderTarget(m_device.Get(), m_rtvHeap, m_srvHeap,
+	m_bloom[1].CreateRenderTarget(m_gfx.Device(), m_rtvHeap, m_srvHeap,
 		m_bloomWidth, m_bloomHeight, kHdrFormat, kBlack, L"Bloom[1]");
 }
 
@@ -97,7 +97,7 @@ void MyEngine::LoadAssets()
 				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS);
 		assert(rs.ParamCount() == RP_MainCount);     // enum 순서와 추가 순서가 어긋나면 바로 걸림
-		m_rootSignature = rs.Build(m_device.Get(), L"Main RootSig");
+		m_rootSignature = rs.Build(m_gfx.Device(), L"Main RootSig");
 	}
 
 	{
@@ -109,7 +109,7 @@ void MyEngine::LoadAssets()
 				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE)                          // PRP_Source1
 			.StaticSampler(StaticSamplers::LinearClamp(0));
 		assert(rs.ParamCount() == PRP_Count);
-		m_postRootSignature = rs.Build(m_device.Get(), L"Post RootSig");
+		m_postRootSignature = rs.Build(m_gfx.Device(), L"Post RootSig");
 	}
 
 	{
@@ -122,13 +122,13 @@ void MyEngine::LoadAssets()
 			.VS(vs).PS(ps).InputLayout(kVertexLayout)
 			.RenderTarget(kHdrFormat).DepthFormat(DXGI_FORMAT_D32_FLOAT)
 			.Cull(D3D12_CULL_MODE_NONE)
-			.Build(m_device.Get(), L"Forward PSO");
+			.Build(m_gfx.Device(), L"Forward PSO");
 
 		m_cubeMapPipelineState = PipelineBuilder(m_rootSignature.Get())
 			.VS(skyVs).PS(skyPs).InputLayout(kVertexLayout)
 			.RenderTarget(kHdrFormat).DepthFormat(DXGI_FORMAT_D32_FLOAT)
 			.Cull(D3D12_CULL_MODE_NONE).DepthWrite(false)        // ← 두 PSO의 유일한 차이가 한눈에 보임
-			.Build(m_device.Get(), L"Skybox PSO");
+			.Build(m_gfx.Device(), L"Skybox PSO");
 	}
 
 	{
@@ -140,14 +140,14 @@ void MyEngine::LoadAssets()
 					.VS(fullscreenVs).PS(ps)                       // 입력 레이아웃 없음 (SV_VertexID로 삼각형 생성)
 					.RenderTarget(rtv).DepthFormat(dsv)
 					.Cull(D3D12_CULL_MODE_NONE).DepthTest(false)
-					.Build(m_device.Get(), name);
+					.Build(m_gfx.Device(), name);
 			};
 		m_brightPSO = makePost(L"BloomBrightPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, L"Bloom Bright PSO");
 		m_blurPSO = makePost(L"BloomBlurPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, L"Bloom Blur PSO");
 		m_combinePSO = makePost(L"BloomCombinePS.cso", m_swapChain.Format(), DXGI_FORMAT_D32_FLOAT, L"Combine PSO");
 	}
 
-	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+	ThrowIfFailed(m_gfx.Device()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
 		m_frames[0].allocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 	m_commandList->SetName(L"Main CommandList");
 	ThrowIfFailed(m_commandList->Close());
@@ -155,16 +155,16 @@ void MyEngine::LoadAssets()
 	CreatePostTargets(m_width, m_height);
 
 	{
-		DirectX::ResourceUploadBatch upload(m_device.Get());
+		DirectX::ResourceUploadBatch upload(m_gfx.Device());
 		upload.Begin();
 
 		// 스카이박스용 박스
 		MeshData box = GeometryGenerator::MakeBox();
-		m_skyboxVB.CreateVertexBuffer(m_device.Get(), upload, box.vertices, L"Skybox VB");
-		m_skyboxIB.CreateIndexBuffer(m_device.Get(), upload, box.indices, L"Skybox IB");
+		m_skyboxVB.CreateVertexBuffer(m_gfx.Device(), upload, box.vertices, L"Skybox VB");
+		m_skyboxIB.CreateIndexBuffer(m_gfx.Device(), upload, box.indices, L"Skybox IB");
 
 		// 기본 텍스처
-		m_defaultTexture.LoadWIC(m_device.Get(), upload, Paths::Asset(L"Textures/kotone.png"), true);
+		m_defaultTexture.LoadWIC(m_gfx.Device(), upload, Paths::Asset(L"Textures/kotone.png"), true);
 
 		// 모델
 		auto meshDatas = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/zaku2/zaku2_1.fbx"));
@@ -173,34 +173,32 @@ void MyEngine::LoadAssets()
 		{
 			const MeshData& md = meshDatas[i];
 			Mesh& mesh = m_meshes[i];
-			mesh.vb.CreateVertexBuffer(m_device.Get(), upload, md.vertices, L"Mesh VB");
-			mesh.ib.CreateIndexBuffer(m_device.Get(), upload, md.indices, L"Mesh IB");
+			mesh.vb.CreateVertexBuffer(m_gfx.Device(), upload, md.vertices, L"Mesh VB");
+			mesh.ib.CreateIndexBuffer(m_gfx.Device(), upload, md.indices, L"Mesh IB");
 			if (!md.albedoTexturePath.empty() && std::filesystem::exists(md.albedoTexturePath))
-				mesh.albedo.LoadWIC(m_device.Get(), upload, md.albedoTexturePath, true);
+				mesh.albedo.LoadWIC(m_gfx.Device(), upload, md.albedoTexturePath, true);
 		}
 
 		// IBL 큐브맵
 		const auto ibl = Paths::Asset(L"DayEnvironmentHDRI057Brdf");
-		m_envMap.LoadDDS(m_device.Get(), upload, ibl / L"DayEnvironmentHDRI057EnvHDR.dds");
-		m_irradianceMap.LoadDDS(m_device.Get(), upload, ibl / L"DayEnvironmentHDRI057DiffuseHDR.dds");
-		m_specularMap.LoadDDS(m_device.Get(), upload, ibl / L"DayEnvironmentHDRI057SpecularHDR.dds");
+		m_envMap.LoadDDS(m_gfx.Device(), upload, ibl / L"DayEnvironmentHDRI057EnvHDR.dds");
+		m_irradianceMap.LoadDDS(m_gfx.Device(), upload, ibl / L"DayEnvironmentHDRI057DiffuseHDR.dds");
+		m_specularMap.LoadDDS(m_gfx.Device(), upload, ibl / L"DayEnvironmentHDRI057SpecularHDR.dds");
 
-		upload.End(m_commandQueue.Get()).wait();
+		upload.End(m_gfx.Queue()).wait();
 
 		// SRV는 업로드가 끝난 뒤 생성
-		m_defaultTexture.CreateSrv(m_device.Get(), m_srvHeap);
+		m_defaultTexture.CreateSrv(m_gfx.Device(), m_srvHeap);
 		for (Mesh& mesh : m_meshes)
-			if (mesh.albedo.IsValid()) mesh.albedo.CreateSrv(m_device.Get(), m_srvHeap);
-		m_envMap.CreateSrv(m_device.Get(), m_srvHeap);
-		m_irradianceMap.CreateSrv(m_device.Get(), m_srvHeap);
-		m_specularMap.CreateSrv(m_device.Get(), m_srvHeap);
+			if (mesh.albedo.IsValid()) mesh.albedo.CreateSrv(m_gfx.Device(), m_srvHeap);
+		m_envMap.CreateSrv(m_gfx.Device(), m_srvHeap);
+		m_irradianceMap.CreateSrv(m_gfx.Device(), m_srvHeap);
+		m_specularMap.CreateSrv(m_gfx.Device(), m_srvHeap);
 	}
 
 	{
-		// 상수 버퍼: 프레임별 영역을 가진 UPLOAD 버퍼 (디스크립터 없음 → 루트 CBV로 바인딩)
-		m_vsCB.Init(m_device.Get(), FrameCount, L"VS Constants");
-		m_skyboxVsCB.Init(m_device.Get(), FrameCount, L"Skybox VS Constants");
-		m_psCB.Init(m_device.Get(), FrameCount, L"PS Constants");
+		// 동적 상수: 프레임당 1MB (256바이트 상수 4096개분)
+		m_uploadAlloc.Init(m_gfx.Device(), FrameCount, 1 * 1024 * 1024, L"Dynamic Upload");
 	}
 
 	{
@@ -217,8 +215,8 @@ void MyEngine::InitGUI()
 	ImGui_ImplWin32_Init(Win32Application::GetHwnd());
 
 	ImGui_ImplDX12_InitInfo initInfo = {};
-	initInfo.Device = m_device.Get();
-	initInfo.CommandQueue = m_commandQueue.Get();
+	initInfo.Device = m_gfx.Device();
+	initInfo.CommandQueue = m_gfx.Queue();
 	initInfo.NumFramesInFlight = FrameCount;
 	initInfo.RTVFormat = m_swapChain.Format();
 	initInfo.DSVFormat = DXGI_FORMAT_D32_FLOAT;
@@ -286,8 +284,6 @@ void MyEngine::OnUpdate(float dt)
 	m_BasicVertexConstantBufferData.projection =
 		m_BasicVertexConstantBufferData.projection.Transpose();
 
-	m_vsCB.Write(m_frameIndex, m_BasicVertexConstantBufferData);
-
 	m_BasicPixelConstantBufferData.material.diffuse =
 		Vector3(m_materialDiffuse);
 	m_BasicPixelConstantBufferData.material.specular =
@@ -304,12 +300,9 @@ void MyEngine::OnUpdate(float dt)
 		}
 	}
 
-	m_psCB.Write(m_frameIndex, m_BasicPixelConstantBufferData);
-
 	m_skyboxVertexConstantBufferData = m_BasicVertexConstantBufferData;
 	m_skyboxVertexConstantBufferData.model = Matrix::CreateScale(20.0f).Transpose();
 	m_skyboxVertexConstantBufferData.invTranspose = Matrix();  // 스카이박스는 노멀 안 씀
-	m_skyboxVsCB.Write(m_frameIndex, m_skyboxVertexConstantBufferData);
 }
 
 void MyEngine::OnRender()
@@ -317,7 +310,7 @@ void MyEngine::OnRender()
 	PopulateCommandList();
 
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
-	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+	m_gfx.Queue()->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	m_swapChain.Present(m_vsync);
 
@@ -344,12 +337,15 @@ void MyEngine::PopulateCommandList()
 	ThrowIfFailed(frame.allocator->Reset());
 	ThrowIfFailed(m_commandList->Reset(frame.allocator.Get(), m_pipelineState.Get()));
 
+	m_uploadAlloc.BeginFrame(m_frameIndex);      // ← 이번 프레임 영역을 처음부터 사용
+
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
 	ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Heap()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	m_commandList->SetGraphicsRootConstantBufferView(RP_PSConstants, m_psCB.GpuAddress(m_frameIndex));
+	m_commandList->SetGraphicsRootConstantBufferView(RP_PSConstants,
+		m_uploadAlloc.Push(m_BasicPixelConstantBufferData));
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -368,7 +364,8 @@ void MyEngine::PopulateCommandList()
 	
 	// ── 스카이박스 ──
 	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
-	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_skyboxVsCB.GpuAddress(m_frameIndex));
+	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants,
+		m_uploadAlloc.Push(m_skyboxVertexConstantBufferData));
 	m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, m_envMap.srv.gpu);
 	D3D12_VERTEX_BUFFER_VIEW skyVbv = m_skyboxVB.VertexView();
 	D3D12_INDEX_BUFFER_VIEW  skyIbv = m_skyboxIB.IndexView();
@@ -378,7 +375,30 @@ void MyEngine::PopulateCommandList()
 	
 	// ── 모델 ──
 	m_commandList->SetPipelineState(m_pipelineState.Get());
-	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_vsCB.GpuAddress(m_frameIndex));
+
+	//const float offsets[] = { -0.6f, +0.6f };
+	//for (float x : offsets)
+	//{
+	//	BasicVertexConstantBuffer cb = m_BasicVertexConstantBufferData;
+	//	Matrix world = cb.model.Transpose()                       // 저장된 건 전치된 값이라 되돌림
+	//		* Matrix::CreateTranslation(x, 0.0f, 0.0f);
+	//	cb.model = world.Transpose();
+	//	// invTranspose는 평행이동에 영향받지 않으므로 그대로 둬도 됨
+
+	//	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_uploadAlloc.Push(cb));
+	//	for (const Mesh& mesh : m_meshes) {
+	//		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
+	//		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
+	//		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
+	//		m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, albedo.srv.gpu);
+	//		m_commandList->IASetVertexBuffers(0, 1, &vbv);
+	//		m_commandList->IASetIndexBuffer(&ibv);
+	//		m_commandList->DrawIndexedInstanced(mesh.ib.Count(), 1, 0, 0, 0);
+	//	}
+	//}
+
+	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants,
+		m_uploadAlloc.Push(m_BasicVertexConstantBufferData));	
 	for (const Mesh& mesh : m_meshes) {
 		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
@@ -482,7 +502,6 @@ void MyEngine::WaitForGpuIdle()
 void MyEngine::UpdateGUI() 
 {
 	ImGui::Text("CPU wait for GPU: %.2f ms", m_lastGpuWaitMs);
-	ImGui::Checkbox("VSync", &m_vsync);
 
 	ImGui::Checkbox("VSync", &m_vsync);
 	if (!m_swapChain.IsTearingSupported())
@@ -568,6 +587,6 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 	UpdateForSizeChange(width, height); 
 	UpdateSceneViewport();
 
-	m_depth.CreateDepth(m_device.Get(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
+	m_depth.CreateDepth(m_gfx.Device(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
 	CreatePostTargets(width, height);
 }
