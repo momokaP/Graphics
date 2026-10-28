@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "MyEngine.h"
 #include <filesystem>
+#include <chrono>
 
 MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 	DXSample(width, height, name),
@@ -47,11 +48,17 @@ void MyEngine::LoadPipeline()
 	scDesc.bufferCount = FrameCount;
 	scDesc.format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	m_swapChain.Init(m_gfx, m_rtvHeap, Win32Application::GetHwnd(), scDesc);
-	m_frameIndex = m_swapChain.CurrentIndex();
 
 	m_depth.CreateDepth(m_device.Get(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
 
-	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)));
+	for (UINT i = 0; i < FrameCount; ++i)
+	{
+		ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+			IID_PPV_ARGS(&m_frames[i].allocator)));
+		wchar_t name[32];
+		swprintf_s(name, L"CommandAllocator[%u]", i);
+		m_frames[i].allocator->SetName(name);
+	}
 }
 
 static const float kSceneClear[4] = { 0.2f, 0.2f, 0.25f, 1.0f };
@@ -141,8 +148,9 @@ void MyEngine::LoadAssets()
 		m_combinePSO = makePost(L"BloomCombinePS.cso", m_swapChain.Format(), DXGI_FORMAT_D32_FLOAT, L"Combine PSO");
 	}
 
-	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
-
+	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+		m_frames[0].allocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+	m_commandList->SetName(L"Main CommandList");
 	ThrowIfFailed(m_commandList->Close());
 
 	CreatePostTargets(m_width, m_height);
@@ -197,7 +205,7 @@ void MyEngine::LoadAssets()
 	}
 
 	{
-		WaitForPreviousFrame();
+		WaitForGpuIdle();
 	}
 }
 
@@ -314,12 +322,12 @@ void MyEngine::OnRender()
 
 	m_swapChain.Present(m_vsync);
 
-	WaitForPreviousFrame();
+	MoveToNextFrame();
 }
 
 void MyEngine::OnDestroy()
 {
-	WaitForPreviousFrame();
+	WaitForGpuIdle();
 
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
@@ -330,9 +338,11 @@ void MyEngine::OnDestroy()
 
 void MyEngine::PopulateCommandList()
 {
-	ThrowIfFailed(m_commandAllocator->Reset());
+	FrameContext& frame = m_frames[m_frameIndex];
 
-	ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
+	// 이 할당자를 쓴 이전 프레임은 MoveToNextFrame에서 이미 끝났음이 보장됨
+	ThrowIfFailed(frame.allocator->Reset());
+	ThrowIfFailed(m_commandList->Reset(frame.allocator.Get(), m_pipelineState.Get()));
 
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
@@ -451,8 +461,32 @@ void MyEngine::WaitForPreviousFrame()
 	m_frameIndex = m_swapChain.CurrentIndex();
 }
 
+void MyEngine::MoveToNextFrame()
+{
+	// ① 방금 제출한 프레임에 "여기까지 끝나면 이 값" 표시를 큐에 넣음
+	m_frames[m_frameIndex].fenceValue = m_gfx.Signal();
+
+	// ② 다음 프레임 슬롯으로 이동
+	m_frameIndex = (m_frameIndex + 1) % FrameCount;
+
+	// ③ 그 슬롯을 마지막으로 쓴 프레임(= FrameCount 프레임 전)이 GPU에서 끝날 때까지만 대기
+	//    CPU가 GPU보다 최대 FrameCount 프레임까지만 앞서 가도록 제한하는 지점
+	const auto t0 = std::chrono::high_resolution_clock::now();
+	m_gfx.WaitForFence(m_frames[m_frameIndex].fenceValue);
+	const auto t1 = std::chrono::high_resolution_clock::now();
+	m_lastGpuWaitMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+}
+
+void MyEngine::WaitForGpuIdle()
+{
+	m_gfx.Flush();   // GPU가 받은 모든 작업이 끝날 때까지 대기
+}
+
 void MyEngine::UpdateGUI() 
 {
+	ImGui::Text("CPU wait for GPU: %.2f ms", m_lastGpuWaitMs);
+	ImGui::Checkbox("VSync", &m_vsync);
+
 	ImGui::Checkbox("VSync", &m_vsync);
 	if (!m_swapChain.IsTearingSupported())
 		ImGui::TextDisabled("(tearing not supported)");
@@ -531,9 +565,8 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 		return;
 
 	// 1. GPU가 현재 백버퍼를 다 쓸 때까지 대기
-	WaitForPreviousFrame();
+	WaitForGpuIdle();                   // 진행 중인 2프레임 모두 끝날 때까지
 	m_swapChain.Resize(width, height);
-	m_frameIndex = m_swapChain.CurrentIndex();
 
 	UpdateForSizeChange(width, height); 
 	UpdateSceneViewport();

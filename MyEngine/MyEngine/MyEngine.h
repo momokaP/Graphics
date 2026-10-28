@@ -103,7 +103,6 @@ private:
 	SwapChain m_swapChain;
 	bool m_vsync = true;
 	ComPtr<ID3D12Device> m_device;
-	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
@@ -139,7 +138,18 @@ private:
 	float m_sceneAspect = 1.0f;
 	void  UpdateSceneViewport();
 
-	UINT m_frameIndex;
+	struct FrameContext
+	{
+		ComPtr<ID3D12CommandAllocator> allocator;   // 이 프레임의 커맨드가 기록되는 메모리
+		UINT64 fenceValue = 0;                      // 이 프레임을 제출할 때 받은 펜스 값 (0 = 아직 제출 안 함)
+	};
+	FrameContext m_frames[FrameCount];
+	UINT m_frameIndex = 0;                          // 엔진이 직접 세는 프레임 번호 (0, 1, 0, 1...)
+	float m_lastGpuWaitMs = 0.0f;                   // 검증용: CPU가 GPU를 기다린 시간
+
+	void MoveToNextFrame();
+	void WaitForGpuIdle();                          // ← WaitForPreviousFrame 이름 변경
+
 	GraphicsDevice m_gfx;
 
 	void LoadPipeline();

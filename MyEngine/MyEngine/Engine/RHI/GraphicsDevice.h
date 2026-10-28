@@ -12,6 +12,8 @@ public:
     ID3D12Device* Device()  const { return m_device.Get(); }
     IDXGIFactory4* Factory() const { return m_factory.Get(); }
     ID3D12CommandQueue* Queue()   const { return m_queue.Get(); }
+    UINT64 CompletedValue() const { return m_fence->GetCompletedValue(); }       // GPU가 끝낸 마지막 값
+    bool   IsFenceComplete(UINT64 value) const { return CompletedValue() >= value; }
 
     UINT64 Signal();                         // 큐 끝에 펜스 신호를 넣고 그 값을 반환
     void   WaitForFence(UINT64 value);       // GPU가 value까지 끝낼 때까지 CPU 대기
