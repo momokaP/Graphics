@@ -202,6 +202,7 @@
     <ClInclude Include="Win32Application.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Engine\Shaders\Bindings.hlsli" />
     <None Include="Engine\Shaders\SceneCommon.hlsli" />
     <None Include="imgui.ini" />
     <None Include="packages.config" />

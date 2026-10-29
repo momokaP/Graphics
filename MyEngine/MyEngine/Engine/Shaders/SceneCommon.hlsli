@@ -3,10 +3,7 @@
 #define SCENE_COMMON_HLSLI
 
 #include "ShaderInterop.h"
-
-ConstantBuffer<FrameConstants> g_frame : register(b0);
-ConstantBuffer<ObjectConstants> g_object : register(b1);
-ConstantBuffer<MaterialConstants> g_material : register(b2);
+#include "Bindings.hlsli"
 
 struct VSInput
 {

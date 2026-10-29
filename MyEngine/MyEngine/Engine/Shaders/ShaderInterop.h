@@ -65,6 +65,17 @@ struct MaterialConstants            // 80 B
     float3 rimColor;    uint  useSmoothstep;
 };
 
+// b3: 패스 파라미터 (루트 상수 8개 = 32 B)
+struct PostConstants
+{
+    float2 invSize;      // 그리는 대상의 1/해상도
+    float2 direction;    // 블러 방향
+    float  threshold;
+    float  strength;
+    float  exposure;
+    float  _pad;
+};
+
 INTEROP_END
 
 // ───────────────────── C++ 전용: 레이아웃 검증 + 기본값 ─────────────────────
@@ -78,6 +89,7 @@ namespace hlsl
     static_assert(sizeof(ObjectConstants) == 128, "ObjectConstants layout");
     static_assert(offsetof(MaterialConstants, rimColor) == 64, "MaterialConstants layout");
     static_assert(sizeof(MaterialConstants) == 80, "MaterialConstants layout");
+    static_assert(sizeof(PostConstants) == 32, "PostConstants: 루트 상수 8개");
 
     // HLSL은 기본값(= 1.0f 같은 멤버 초기화)을 못 쓰므로 C++ 함수로 제공
     inline Light DefaultLight()

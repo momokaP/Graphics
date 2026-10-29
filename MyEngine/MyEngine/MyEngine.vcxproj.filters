@@ -145,6 +145,7 @@
     </None>
     <None Include="imgui.ini" />
     <None Include="Engine\Shaders\SceneCommon.hlsli" />
+    <None Include="Engine\Shaders\Bindings.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Engine\Shaders\VertexShader.hlsl">

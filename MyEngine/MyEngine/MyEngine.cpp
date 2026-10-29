@@ -89,38 +89,34 @@ void MyEngine::CreatePostTargets(UINT width, UINT height)
 void MyEngine::LoadAssets()
 {
 	{
+		using namespace StaticSamplers;
+		constexpr auto PS = D3D12_SHADER_VISIBILITY_PIXEL;
+		constexpr auto SRV = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		constexpr auto VOLATILE = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;   // 같은 프레임에 쓰였다가 읽히는 텍스처
+		constexpr auto STATIC = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;     // 로드 후 절대 안 바뀜
+
 		RootSignatureBuilder rs;
-		rs.CBV(0, D3D12_SHADER_VISIBILITY_ALL)       // RP_Frame: VS(viewProj) + PS(eyeWorld, lights)가 같이 읽음
-			.CBV(1, D3D12_SHADER_VISIBILITY_VERTEX)    // RP_Object
-			.CBV(2, D3D12_SHADER_VISIBILITY_PIXEL)     // RP_Material                            // RP_PSConstants (b0)
-			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                      // RP_Albedo
-			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_EnvMap
-			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_Irradiance
-			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                            // RP_Specular
-			.StaticSampler(StaticSamplers::PointBorder(0))
-			.StaticSampler(StaticSamplers::LinearClamp(1))
+		rs.CBV(0, D3D12_SHADER_VISIBILITY_ALL)            // RP_Frame
+			.CBV(1, D3D12_SHADER_VISIBILITY_VERTEX)         // RP_Object
+			.CBV(2, PS)                                     // RP_Material
+			.Constants(kPostConstantCount, 3, PS)           // RP_PassConstants
+			.Table(SRV, 1, 0, PS, VOLATILE)                 // RP_Tex0
+			.Table(SRV, 1, 1, PS, VOLATILE)                 // RP_Tex1
+			.Table(SRV, 1, 2, PS, VOLATILE)                 // RP_Tex2
+			.Table(SRV, 1, 3, PS, VOLATILE)                 // RP_Tex3
+			.Table(SRV, 1, 4, PS, STATIC)                   // RP_EnvMap
+			.Table(SRV, 1, 5, PS, STATIC)                   // RP_Irradiance
+			.Table(SRV, 1, 6, PS, STATIC)                   // RP_Specular
+			.StaticSampler(PointClamp(0))
+			.StaticSampler(LinearClamp(1))
+			.StaticSampler(LinearWrap(2))
+			.StaticSampler(AnisoWrap(3))
 			.Flags(D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 				D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 				D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 				D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS);
-		assert(rs.ParamCount() == RP_MainCount);     // enum 순서와 추가 순서가 어긋나면 바로 걸림
-		m_rootSignature = rs.Build(m_gfx.Device(), L"Main RootSig");
-	}
-
-	{
-		RootSignatureBuilder rs;
-		rs.Constants(kPostConstantCount, 0, D3D12_SHADER_VISIBILITY_PIXEL)    // PRP_Constants
-			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE)                          // PRP_Source0
-			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL,
-				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE)                          // PRP_Source1
-			.StaticSampler(StaticSamplers::LinearClamp(0));
-		assert(rs.ParamCount() == PRP_Count);
-		m_postRootSignature = rs.Build(m_gfx.Device(), L"Post RootSig");
+		assert(rs.ParamCount() == RP_Count);
+		m_rootSignature = rs.Build(m_gfx.Device(), L"Engine RootSig");
 	}
 
 	{
@@ -146,7 +142,7 @@ void MyEngine::LoadAssets()
 		auto makePost = [&](const wchar_t* psFile, DXGI_FORMAT rtv, DXGI_FORMAT dsv, const wchar_t* name)
 			{
 				auto ps = LoadShader(Paths::Shader(psFile));      // Build까지 같은 식 안에서 끝나므로 수명 OK
-				return PipelineBuilder(m_postRootSignature.Get())
+				return PipelineBuilder(m_rootSignature.Get())
 					.VS(fullscreenVs).PS(ps)                       // 입력 레이아웃 없음 (SV_VertexID로 삼각형 생성)
 					.RenderTarget(rtv).DepthFormat(dsv)
 					.Cull(D3D12_CULL_MODE_NONE).DepthTest(false)
@@ -324,6 +320,10 @@ void MyEngine::PopulateCommandList()
 
 	m_commandList->SetGraphicsRootConstantBufferView(RP_Frame, m_uploadAlloc.Push(m_frameConstants));
 	m_commandList->SetGraphicsRootConstantBufferView(RP_Material, m_uploadAlloc.Push(m_material));
+	m_commandList->SetGraphicsRootDescriptorTable(RP_EnvMap, m_envMap.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_Irradiance, m_irradianceMap.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_Specular, m_specularMap.srv.gpu);
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -334,16 +334,9 @@ void MyEngine::PopulateCommandList()
 	m_commandList->ClearRenderTargetView(m_sceneColor.rtv.cpu, m_sceneColor.ClearColor(), 0, nullptr);
 	m_commandList->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-	m_commandList->SetGraphicsRootDescriptorTable(RP_EnvMap, m_envMap.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(RP_Irradiance, m_irradianceMap.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(RP_Specular, m_specularMap.srv.gpu);
-
-	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	
 	// ── 스카이박스 ──
 	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
 	m_commandList->SetGraphicsRootConstantBufferView(RP_Object, m_uploadAlloc.Push(m_skyboxObject));
-	m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, m_envMap.srv.gpu);
 	D3D12_VERTEX_BUFFER_VIEW skyVbv = m_skyboxVB.VertexView();
 	D3D12_INDEX_BUFFER_VIEW  skyIbv = m_skyboxIB.IndexView();
 	m_commandList->IASetVertexBuffers(0, 1, &skyVbv);
@@ -358,7 +351,7 @@ void MyEngine::PopulateCommandList()
 		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
 		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
-		m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, albedo.srv.gpu);
+		m_commandList->SetGraphicsRootDescriptorTable(RP_Tex0, albedo.srv.gpu);
 		m_commandList->IASetVertexBuffers(0, 1, &vbv);
 		m_commandList->IASetIndexBuffer(&ibv);
 		m_commandList->DrawIndexedInstanced(mesh.ib.Count(), 1, 0, 0, 0);
@@ -368,29 +361,25 @@ void MyEngine::PopulateCommandList()
 	m_sceneColor.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	// ── 후처리 공통 설정 ──
-	m_commandList->SetGraphicsRootSignature(m_postRootSignature.Get());   // ⚠ 이전 루트 파라미터는 모두 무효
-	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
 	CD3DX12_VIEWPORT bloomVp(0.0f, 0.0f, float(m_bloomWidth), float(m_bloomHeight));
 	CD3DX12_RECT bloomRect(0, 0, LONG(m_bloomWidth), LONG(m_bloomHeight));
 	m_commandList->RSSetViewports(1, &bloomVp);
 	m_commandList->RSSetScissorRects(1, &bloomRect);
 
 	// 블룸 패스 하나: target에 src를 읽어서 그림
-	auto bloomPass = [&](ID3D12PipelineState* pso, Texture& target, const Texture& src, const PostConstants& c)
+	auto bloomPass = [&](ID3D12PipelineState* pso, Texture& target, const Texture& src, const hlsl::PostConstants& c)
 		{
 			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 			m_commandList->OMSetRenderTargets(1, &target.rtv.cpu, FALSE, nullptr);
 			m_commandList->SetPipelineState(pso);
-			m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, kPostConstantCount, &c, 0);
-			m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, src.srv.gpu);
+			m_commandList->SetGraphicsRoot32BitConstants(RP_PassConstants, kPostConstantCount, &c, 0);
+			m_commandList->SetGraphicsRootDescriptorTable(RP_Tex0, src.srv.gpu);
 			m_commandList->DrawInstanced(3, 1, 0, 0);
 			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		};
 
-	PostConstants pc = {};
-	pc.invSize[0] = 1.0f / m_bloomWidth;
-	pc.invSize[1] = 1.0f / m_bloomHeight;
+	hlsl::PostConstants pc{};
+	pc.invSize = Vector2(1.0f / m_bloomWidth, 1.0f / m_bloomHeight);
 	pc.threshold = m_bloomThreshold;
 	pc.strength = m_bloomStrength;
 	pc.exposure = m_exposure;
@@ -398,9 +387,9 @@ void MyEngine::PopulateCommandList()
 	bloomPass(m_brightPSO.Get(), m_bloom[0], m_sceneColor, pc);
 	for (int i = 0; i < m_bloomBlurCount; ++i)
 	{
-		pc.direction[0] = 1.0f; pc.direction[1] = 0.0f;
+		pc.direction = Vector2(1.0f, 0.0f);
 		bloomPass(m_blurPSO.Get(), m_bloom[1], m_bloom[0], pc);
-		pc.direction[0] = 0.0f; pc.direction[1] = 1.0f;
+		pc.direction = Vector2(0.0f, 1.0f);
 		bloomPass(m_blurPSO.Get(), m_bloom[0], m_bloom[1], pc);
 	}
 
@@ -415,12 +404,11 @@ void MyEngine::PopulateCommandList()
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-	pc.invSize[0] = 1.0f / m_width;
-	pc.invSize[1] = 1.0f / m_height;
+	pc.invSize = Vector2(1.0f / m_width, 1.0f / m_height);
 	m_commandList->SetPipelineState(m_combinePSO.Get());
-	m_commandList->SetGraphicsRoot32BitConstants(PRP_Constants, kPostConstantCount, &pc, 0);
-	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source0, m_sceneColor.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(PRP_Source1, m_bloom[0].srv.gpu);
+	m_commandList->SetGraphicsRoot32BitConstants(RP_PassConstants, kPostConstantCount, &pc, 0);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_Tex0, m_sceneColor.srv.gpu);
+	m_commandList->SetGraphicsRootDescriptorTable(RP_Tex1, m_bloom[0].srv.gpu);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
 	// ImGui: 박스 다음, Present 배리어 전

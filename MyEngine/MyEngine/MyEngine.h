@@ -114,19 +114,9 @@ private:
 
 	UINT m_bloomWidth = 1, m_bloomHeight = 1;
 
-	ComPtr<ID3D12RootSignature> m_postRootSignature;
 	ComPtr<ID3D12PipelineState> m_brightPSO, m_blurPSO, m_combinePSO;
-
-	struct PostConstants {          // 루트 상수 8개 (b0)
-		float invSize[2];           // 그리는 대상의 1/해상도
-		float direction[2];         // 블러 방향
-		float threshold;
-		float strength;
-		float exposure;
-		float pad;
-	};
-	static_assert(sizeof(PostConstants) % 4 == 0, "Root constants must be 32-bit aligned");
-	static constexpr UINT kPostConstantCount = sizeof(PostConstants) / 4;
+	
+	static constexpr UINT kPostConstantCount = sizeof(hlsl::PostConstants) / 4;
 
 	float m_bloomThreshold = 1.0f;
 	float m_bloomStrength = 0.1f;
@@ -134,21 +124,20 @@ private:
 
 	int   m_bloomBlurCount = 2;
 
-	enum MainRootParam : UINT {
-		RP_Frame = 0,      // 루트 CBV b0 (VS+PS)
-		RP_Object,         // 루트 CBV b1 (VS)
-		RP_Material,       // 루트 CBV b2 (PS)
-		RP_Albedo,         // t0
-		RP_EnvMap,         // t1
-		RP_Irradiance,     // t2
-		RP_Specular,       // t3
-		RP_MainCount
-	};
-	enum PostRootParam : UINT {
-		PRP_Constants = 0,    // b0 (루트 상수)
-		PRP_Source0,          // t0
-		PRP_Source1,          // t1
-		PRP_Count
+	// 엔진 공용 루트 시그니처 슬롯 — 순서는 Bindings.hlsli의 레지스터 규약과 대응
+	enum RootParam : UINT {
+		RP_Frame = 0,        // CBV b0 (ALL)
+		RP_Object,           // CBV b1 (VS)
+		RP_Material,         // CBV b2 (PS)
+		RP_PassConstants,    // 루트 상수 ×8, b3 (PS)
+		RP_Tex0,             // t0  패스 입력 / 머티리얼
+		RP_Tex1,             // t1
+		RP_Tex2,             // t2
+		RP_Tex3,             // t3
+		RP_EnvMap,           // t4  전역
+		RP_Irradiance,       // t5  전역
+		RP_Specular,         // t6  전역
+		RP_Count
 	};
 
 	void CreatePostTargets(UINT width, UINT height);

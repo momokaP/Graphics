@@ -89,13 +89,7 @@ float3 ComputeSpotLight(Light L, MaterialConstants mat, float3 pos, float3 norma
     // warning X4000: use of potentially uninitialized variable
 }
 
-Texture2D g_texture0 : register(t0);
-TextureCube g_textureCube : register(t1);
-TextureCube g_textureCubeDiffuse : register(t2);
-TextureCube g_textureCubeSpecular : register(t3);
-
-SamplerState g_sampler : register(s0);
-SamplerState g_linearSampler : register(s1);
+Texture2D g_albedo : register(t0);
 
 float3 ACESFilm(float3 x)   // 근사 ACES 톤매핑
 {
@@ -128,99 +122,115 @@ float3 SchlickFresnel(float3 fresnelR0, float3 normal, float3 toEye)
 }
 
 float4 main(PSInput input) : SV_TARGET
-{   
-    const MaterialConstants material = g_material;
-    
+{
+    float3 N = normalize(input.normalWorld); // 보간된 노멀 재정규화
     float3 toEye = normalize(g_frame.eyeWorld - input.posWorld);
 
-    float3 color = float3(0.0, 0.0, 0.0);
-    
+    // ── 표면 색: 머티리얼 색 × 텍스처 ──
+    float3 albedo = g_material.useTexture ? g_albedo.Sample(g_anisoWrap, input.texcoord).rgb
+                                          : float3(1.0, 1.0, 1.0);
+    MaterialConstants mat = g_material; // 로컬 복사본을 수정
+    mat.diffuse *= albedo; // 직접광과 IBL 디퓨즈 모두 텍스처 색을 따름
+    mat.ambient *= albedo;
+
+    // ── 직접광 ──
+    float3 direct = float3(0.0, 0.0, 0.0);
     int i = 0;
-    
-    // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-for
-    // https://forum.unity.com/threads/what-are-unroll-and-loop-when-to-use-them.1283096/
-    
-    [unroll] // warning X3557: loop only executes for 1 iteration(s), forcing loop to unroll
+    [unroll]
     for (i = 0; i < NUM_DIR_LIGHTS; ++i)
-    {
-        color += ComputeDirectionalLight(g_frame.lights[i], material, input.normalWorld, toEye);
-    }
-    
+        direct += ComputeDirectionalLight(g_frame.lights[i], mat, N, toEye);
     [unroll]
     for (i = NUM_DIR_LIGHTS; i < NUM_DIR_LIGHTS + NUM_POINT_LIGHTS; ++i)
-    {
-        color += ComputePointLight(g_frame.lights[i], material, input.posWorld, input.normalWorld, toEye);
-    }
-    
+        direct += ComputePointLight(g_frame.lights[i], mat, input.posWorld, N, toEye);
     [unroll]
-    for (i = NUM_DIR_LIGHTS + NUM_POINT_LIGHTS; i < NUM_DIR_LIGHTS + NUM_POINT_LIGHTS + NUM_SPOT_LIGHTS; ++i)
-    {
-        color += ComputeSpotLight(g_frame.lights[i], material, input.posWorld, input.normalWorld, toEye);
-    }
-    
-    //return float4(color, 1.0);
-    float rim = (1.0 - dot(input.normalWorld, toEye));
-    
-    if (material.useSmoothstep)
+    for (i = NUM_DIR_LIGHTS + NUM_POINT_LIGHTS; i < MAX_LIGHTS; ++i)
+        direct += ComputeSpotLight(g_frame.lights[i], mat, input.posWorld, N, toEye);
+
+    // ── IBL ──
+    float3 R = reflect(-toEye, N);
+    float roughness = sqrt(2.0 / (mat.shininess + 2.0));
+    uint w, h, mipCount;
+    g_specularMap.GetDimensions(0, w, h, mipCount);
+    float lod = roughness * (mipCount - 1);
+
+    float3 irradiance = g_irradianceMap.Sample(g_linearClamp, N).rgb;
+    float3 prefiltered = g_specularMap.SampleLevel(g_linearClamp, R, lod).rgb;
+    float3 F = SchlickFresnel(mat.fresnelR0, N, toEye);
+
+    float3 iblDiffuse = irradiance * mat.diffuse; // albedo는 이미 mat.diffuse에 들어 있음
+    float3 iblSpecular = prefiltered * mat.specular * F;
+
+    // ── 림 ──
+    float rim = 1.0 - saturate(dot(N, toEye));
+    if (mat.useSmoothstep)
         rim = smoothstep(0.0, 1.0, rim);
-    rim = pow(abs(rim), material.rimPower);
-    color += rim * material.rimColor * material.rimStrength;
+    float3 rimTerm = pow(rim, mat.rimPower) * mat.rimColor * mat.rimStrength;
 
-    // return g_textureCube0.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
-    
-    {
-        float3 N = input.normalWorld;
-        float3 R = reflect(-toEye, N);
-
-        // Blinn-Phong 광택 → 거칠기 근사 (shininess 1 → 거침, 256 → 매끈)
-        float roughness = sqrt(2.0 / (material.shininess + 2.0));
-
-        uint w, h, mipCount;
-        g_textureCubeSpecular.GetDimensions(0, w, h, mipCount);
-        float lod = roughness * (mipCount - 1);
-
-        float3 irradiance = g_textureCubeDiffuse.Sample(g_linearSampler, N).rgb;
-        float3 prefiltered = g_textureCubeSpecular.SampleLevel(g_linearSampler, R, lod).rgb;
-
-        float3 albedo = material.useTexture ? g_texture0.Sample(g_linearSampler, input.texcoord).rgb
-                               : float3(1.0, 1.0, 1.0);
-        float3 F = SchlickFresnel(material.fresnelR0, N, toEye);
-
-        float3 diffuse = irradiance * material.diffuse * albedo;
-        float3 specular = prefiltered * material.specular * F;
-
-        return float4(diffuse + specular, 1.0); // 모든 항이 환경 밝기에 선형 → 노출이 그대로 반영됨
-    }
-    
-    {
-        //float3 diffuse = g_textureCubeDiffuse.Sample(g_sampler, input.normalWorld).rgb;
-        //float3 specular = g_textureCube.Sample(g_sampler, reflect(-toEye, input.normalWorld)).rgb;
-
-        //float avg = (specular.x + specular.y + specular.z) / 3.0;
-        //specular *= pow(saturate(avg), material.shininess);
-
-        //diffuse *= material.diffuse;
-        //specular *= material.specular;
-
-        //float3 f = SchlickFresnel(material.fresnelR0, input.normalWorld, toEye);
-        //specular *= f;
-
-        //if (useTexture)
-        //    diffuse *= g_texture0.Sample(g_sampler, input.texcoord).rgb;
-
-        //return float4(diffuse + specular, 1.0);
-    }
-    
-    {
-        //float3 hdr = g_textureCube.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
-
-        //const float exposure = 1.0; // 밝기 조절 (1~3 정도로 바꿔 보기)
-        //float3 color3 = ACESFilm(hdr * exposure); // HDR → 0~1
-        //color3 = pow(color3, 1.0 / 2.2); // 선형 → 감마 (모니터용)
-
-        //return float4(color3, 1.0);
-    }
-
-    
-    //return useTexture ? float4(color, 1.0) * g_texture0.Sample(g_sampler, input.texcoord) : float4(color, 1.0);
+    return float4(direct + iblDiffuse + iblSpecular + rimTerm, 1.0);
 }
+
+//float4 main(PSInput input) : SV_TARGET
+//{   
+//    const MaterialConstants material = g_material;
+    
+//    float3 toEye = normalize(g_frame.eyeWorld - input.posWorld);
+
+//    float3 color = float3(0.0, 0.0, 0.0);
+    
+//    int i = 0;
+    
+//    // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-for
+//    // https://forum.unity.com/threads/what-are-unroll-and-loop-when-to-use-them.1283096/
+    
+//    [unroll] // warning X3557: loop only executes for 1 iteration(s), forcing loop to unroll
+//    for (i = 0; i < NUM_DIR_LIGHTS; ++i)
+//    {
+//        color += ComputeDirectionalLight(g_frame.lights[i], material, input.normalWorld, toEye);
+//    }
+    
+//    [unroll]
+//    for (i = NUM_DIR_LIGHTS; i < NUM_DIR_LIGHTS + NUM_POINT_LIGHTS; ++i)
+//    {
+//        color += ComputePointLight(g_frame.lights[i], material, input.posWorld, input.normalWorld, toEye);
+//    }
+    
+//    [unroll]
+//    for (i = NUM_DIR_LIGHTS + NUM_POINT_LIGHTS; i < NUM_DIR_LIGHTS + NUM_POINT_LIGHTS + NUM_SPOT_LIGHTS; ++i)
+//    {
+//        color += ComputeSpotLight(g_frame.lights[i], material, input.posWorld, input.normalWorld, toEye);
+//    }
+    
+//    //return float4(color, 1.0);
+//    float rim = (1.0 - dot(input.normalWorld, toEye));
+    
+//    if (material.useSmoothstep)
+//        rim = smoothstep(0.0, 1.0, rim);
+//    rim = pow(abs(rim), material.rimPower);
+//    color += rim * material.rimColor * material.rimStrength;
+
+//    // return g_textureCube0.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
+    
+//    {
+//        float3 N = input.normalWorld;
+//        float3 R = reflect(-toEye, N);
+
+//        // Blinn-Phong 광택 → 거칠기 근사 (shininess 1 → 거침, 256 → 매끈)
+//        float roughness = sqrt(2.0 / (material.shininess + 2.0));
+
+//        uint w, h, mipCount;
+//        g_specularMap.GetDimensions(0, w, h, mipCount); // g_textureCubeSpecular
+//        float lod = roughness * (mipCount - 1);
+
+//        float3 irradiance = g_irradianceMap.Sample(g_linearClamp, N).rgb; // g_textureCubeDiffuse, g_linearSampler
+//        float3 prefiltered = g_specularMap.SampleLevel(g_linearClamp, R, lod).rgb; // g_textureCubeSpecular
+
+//        float3 albedo = material.useTexture ? g_albedo.Sample(g_anisoWrap, input.texcoord).rgb   // g_texture0, 샘플러 변경
+//                                    : float3(1.0, 1.0, 1.0);
+//        float3 F = SchlickFresnel(material.fresnelR0, N, toEye);
+
+//        float3 diffuse = irradiance * material.diffuse * albedo;
+//        float3 specular = prefiltered * material.specular * F;
+
+//        return float4(diffuse + specular + color, 1.0);
+//    }
+//}
