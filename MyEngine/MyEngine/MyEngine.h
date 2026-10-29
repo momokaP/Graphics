@@ -12,6 +12,16 @@
 #include "RHI/DeferredReleaseQueue.h"
 #include "RHI/LinearUploadAllocator.h"
 
+#include "Renderer/RenderTypes.h"
+#include "Renderer/RenderTypes.h"
+#include "Renderer/RenderScene.h"
+#include "Renderer/GpuMarker.h"
+#include "Renderer/Passes/SkyboxPass.h"
+#include "Renderer/Passes/ForwardPass.h"
+#include "Renderer/Passes/BloomPass.h"
+#include "Renderer/Passes/TonemapPass.h"
+#include "Renderer/Passes/UIPass.h"
+
 #include <directxtk12/ResourceUploadBatch.h>
 
 #include "Vertex.h"
@@ -51,18 +61,15 @@ private:
 	};
 	std::vector<Mesh> m_meshes;
 
-	Texture m_sceneColor, m_bloom[2], m_depth;
+	Texture m_sceneColor, m_depth;
 	Texture m_defaultTexture;
 	Texture m_envMap, m_irradianceMap, m_specularMap;
-	GpuBuffer m_skyboxVB, m_skyboxIB;
 
 	CD3DX12_VIEWPORT m_viewport;
 	CD3DX12_RECT m_scissorRect;
 	SwapChain m_swapChain;
 	bool m_vsync = true;
 	ComPtr<ID3D12RootSignature> m_rootSignature;
-	ComPtr<ID3D12PipelineState> m_pipelineState;
-	ComPtr<ID3D12PipelineState> m_cubeMapPipelineState;
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
 	LinearUploadAllocator m_uploadAlloc;
 
@@ -70,7 +77,6 @@ private:
 
 	hlsl::FrameConstants    m_frameConstants{};
 	hlsl::ObjectConstants   m_modelObject{};
-	hlsl::ObjectConstants   m_skyboxObject{};
 	hlsl::MaterialConstants m_material = hlsl::DefaultMaterial();
 
 	int m_lightType = 0;
@@ -109,39 +115,23 @@ private:
 	void LoadPipeline();
 	void LoadAssets();
 	void PopulateCommandList();
-
-	static constexpr DXGI_FORMAT kHdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-
-	UINT m_bloomWidth = 1, m_bloomHeight = 1;
-
-	ComPtr<ID3D12PipelineState> m_brightPSO, m_blurPSO, m_combinePSO;
 	
-	static constexpr UINT kPostConstantCount = sizeof(hlsl::PostConstants) / 4;
-
 	float m_bloomThreshold = 1.0f;
 	float m_bloomStrength = 0.1f;
 	float m_exposure = 1.0f;
 
 	int   m_bloomBlurCount = 2;
 
-	// 엔진 공용 루트 시그니처 슬롯 — 순서는 Bindings.hlsli의 레지스터 규약과 대응
-	enum RootParam : UINT {
-		RP_Frame = 0,        // CBV b0 (ALL)
-		RP_Object,           // CBV b1 (VS)
-		RP_Material,         // CBV b2 (PS)
-		RP_PassConstants,    // 루트 상수 ×8, b3 (PS)
-		RP_Tex0,             // t0  패스 입력 / 머티리얼
-		RP_Tex1,             // t1
-		RP_Tex2,             // t2
-		RP_Tex3,             // t3
-		RP_EnvMap,           // t4  전역
-		RP_Irradiance,       // t5  전역
-		RP_Specular,         // t6  전역
-		RP_Count
-	};
-
-	void CreatePostTargets(UINT width, UINT height);
-
 	DeferredReleaseQueue m_releaseQueue;
+
+	SkyboxPass  m_skyboxPass;
+	ForwardPass m_forwardPass;
+	BloomPass   m_bloomPass;
+	TonemapPass m_tonemapPass;
+	UIPass      m_uiPass;
+	RenderScene m_renderScene;
+
+	RenderInitContext MakeInitContext();
+	void CreateSizeDependentTargets(UINT width, UINT height);
 
 };

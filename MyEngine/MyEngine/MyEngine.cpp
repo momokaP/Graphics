@@ -3,18 +3,6 @@
 #include <filesystem>
 #include <chrono>
 
-namespace
-{
-	hlsl::ObjectConstants MakeObjectConstants(const Matrix& world)
-	{
-		hlsl::ObjectConstants o;
-		o.world = world;
-		// 노멀은 w=0이라 평행이동은 영향 없음 → 역행렬의 전치만 하면 됨 (비균일 스케일에서도 노멀이 올바름)
-		o.worldInvTranspose = world.Invert().Transpose();
-		return o;
-	}
-}
-
 MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 	DXSample(width, height, name),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
@@ -58,8 +46,6 @@ void MyEngine::LoadPipeline()
 	scDesc.format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	m_swapChain.Init(m_gfx, m_rtvHeap, Win32Application::GetHwnd(), scDesc);
 
-	m_depth.CreateDepth(m_gfx.Device(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
-
 	for (UINT i = 0; i < FrameCount; ++i)
 	{
 		ThrowIfFailed(m_gfx.Device()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -71,20 +57,6 @@ void MyEngine::LoadPipeline()
 }
 
 static const float kSceneClear[4] = { 0.2f, 0.2f, 0.25f, 1.0f };
-
-void MyEngine::CreatePostTargets(UINT width, UINT height)
-{
-	static const float kBlack[4] = { 0, 0, 0, 1 };
-	m_sceneColor.CreateRenderTarget(m_gfx.Device(), m_rtvHeap, m_srvHeap,
-		width, height, kHdrFormat, kSceneClear, L"SceneColor");
-
-	m_bloomWidth = max(1u, width / 2);
-	m_bloomHeight = max(1u, height / 2);
-	m_bloom[0].CreateRenderTarget(m_gfx.Device(), m_rtvHeap, m_srvHeap,
-		m_bloomWidth, m_bloomHeight, kHdrFormat, kBlack, L"Bloom[0]");
-	m_bloom[1].CreateRenderTarget(m_gfx.Device(), m_rtvHeap, m_srvHeap,
-		m_bloomWidth, m_bloomHeight, kHdrFormat, kBlack, L"Bloom[1]");
-}
 
 void MyEngine::LoadAssets()
 {
@@ -119,55 +91,21 @@ void MyEngine::LoadAssets()
 		m_rootSignature = rs.Build(m_gfx.Device(), L"Engine RootSig");
 	}
 
-	{
-		auto vs = LoadShader(Paths::Shader(L"VertexShader.cso"));
-		auto ps = LoadShader(Paths::Shader(L"PixelShader.cso"));
-		auto skyPs = LoadShader(Paths::Shader(L"CubeMappingPixelShader.cso"));
-
-		m_pipelineState = PipelineBuilder(m_rootSignature.Get())
-			.VS(vs).PS(ps).InputLayout(kVertexLayout)
-			.RenderTarget(kHdrFormat).DepthFormat(DXGI_FORMAT_D32_FLOAT)
-			.Cull(D3D12_CULL_MODE_NONE)
-			.Build(m_gfx.Device(), L"Forward PSO");
-
-		m_cubeMapPipelineState = PipelineBuilder(m_rootSignature.Get())
-			.VS(vs).PS(skyPs).InputLayout(kVertexLayout)
-			.RenderTarget(kHdrFormat).DepthFormat(DXGI_FORMAT_D32_FLOAT)
-			.Cull(D3D12_CULL_MODE_NONE).DepthWrite(false)        // ← 두 PSO의 유일한 차이가 한눈에 보임
-			.Build(m_gfx.Device(), L"Skybox PSO");
-	}
-
-	{
-		auto fullscreenVs = LoadShader(Paths::Shader(L"FullscreenVS.cso"));
-		auto makePost = [&](const wchar_t* psFile, DXGI_FORMAT rtv, DXGI_FORMAT dsv, const wchar_t* name)
-			{
-				auto ps = LoadShader(Paths::Shader(psFile));      // Build까지 같은 식 안에서 끝나므로 수명 OK
-				return PipelineBuilder(m_rootSignature.Get())
-					.VS(fullscreenVs).PS(ps)                       // 입력 레이아웃 없음 (SV_VertexID로 삼각형 생성)
-					.RenderTarget(rtv).DepthFormat(dsv)
-					.Cull(D3D12_CULL_MODE_NONE).DepthTest(false)
-					.Build(m_gfx.Device(), name);
-			};
-		m_brightPSO = makePost(L"BloomBrightPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, L"Bloom Bright PSO");
-		m_blurPSO = makePost(L"BloomBlurPS.cso", kHdrFormat, DXGI_FORMAT_UNKNOWN, L"Bloom Blur PSO");
-		m_combinePSO = makePost(L"BloomCombinePS.cso", m_swapChain.Format(), DXGI_FORMAT_D32_FLOAT, L"Combine PSO");
-	}
-
 	ThrowIfFailed(m_gfx.Device()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-		m_frames[0].allocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+		m_frames[0].allocator.Get(), nullptr, IID_PPV_ARGS(&m_commandList)));
 	m_commandList->SetName(L"Main CommandList");
 	ThrowIfFailed(m_commandList->Close());
-
-	CreatePostTargets(m_width, m_height);
 
 	{
 		DirectX::ResourceUploadBatch upload(m_gfx.Device());
 		upload.Begin();
 
-		// 스카이박스용 박스
-		MeshData box = GeometryGenerator::MakeBox();
-		m_skyboxVB.CreateVertexBuffer(m_gfx.Device(), upload, box.vertices, L"Skybox VB");
-		m_skyboxIB.CreateIndexBuffer(m_gfx.Device(), upload, box.indices, L"Skybox IB");
+		RenderInitContext initCtx = MakeInitContext();
+		initCtx.upload = &upload;                   // 패스 Init 동안만 유효
+		m_skyboxPass.Init(initCtx);
+		m_forwardPass.Init(initCtx);
+		m_bloomPass.Init(initCtx);
+		m_tonemapPass.Init(initCtx);
 
 		// 기본 텍스처
 		m_defaultTexture.LoadWIC(m_gfx.Device(), upload, Paths::Asset(L"Textures/kotone.png"), true);
@@ -202,6 +140,8 @@ void MyEngine::LoadAssets()
 		m_specularMap.CreateSrv(m_gfx.Device(), m_srvHeap);
 	}
 
+	CreateSizeDependentTargets(m_width, m_height);
+
 	{
 		// 동적 상수: 프레임당 1MB (256바이트 상수 4096개분)
 		m_uploadAlloc.Init(m_gfx.Device(), FrameCount, 1 * 1024 * 1024, L"Dynamic Upload");
@@ -217,32 +157,9 @@ void MyEngine::InitGUI()
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
+	ImGui_ImplWin32_Init(Win32Application::GetHwnd());   // 플랫폼(창) 쪽은 앱에 남김
 
-	ImGui_ImplWin32_Init(Win32Application::GetHwnd());
-
-	ImGui_ImplDX12_InitInfo initInfo = {};
-	initInfo.Device = m_gfx.Device();
-	initInfo.CommandQueue = m_gfx.Queue();
-	initInfo.NumFramesInFlight = FrameCount;
-	initInfo.RTVFormat = m_swapChain.Format();
-	initInfo.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-	initInfo.SrvDescriptorHeap = m_srvHeap.Heap();
-	initInfo.UserData = &m_srvHeap;
-	initInfo.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info,
-		D3D12_CPU_DESCRIPTOR_HANDLE* outCpu,
-		D3D12_GPU_DESCRIPTOR_HANDLE* outGpu)
-		{
-			DescriptorHandle h = static_cast<DescriptorHeap*>(info->UserData)->Allocate();
-			*outCpu = h.cpu;
-			*outGpu = h.gpu;
-		};
-	initInfo.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* info,
-		D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE)
-		{
-			static_cast<DescriptorHeap*>(info->UserData)->Free(cpu);
-		};
-
-	ImGui_ImplDX12_Init(&initInfo);
+	m_uiPass.Init(MakeInitContext());                    // DX12 쪽은 UIPass
 }
 
 void MyEngine::OnUpdate(float dt)
@@ -271,12 +188,38 @@ void MyEngine::OnUpdate(float dt)
 		Matrix::CreateRotationX(m_modelRotation.x) *
 		Matrix::CreateRotationZ(m_modelRotation.z) *
 		Matrix::CreateTranslation(m_modelTranslation);
-	m_modelObject = MakeObjectConstants(world);
-	m_skyboxObject = MakeObjectConstants(Matrix::CreateScale(20.0f));
+	m_modelObject = hlsl::MakeObjectConstants(world);
 
 	// ── 머티리얼 상수 ──
 	m_material.diffuse = Vector3(m_materialDiffuse);
 	m_material.specular = Vector3(m_materialSpecular);
+
+	// ── 렌더러에 넘길 데이터 ──
+	m_renderScene.frame = m_frameConstants;
+	m_renderScene.material = m_material;
+
+	m_renderScene.draws.clear();
+	for (const Mesh& mesh : m_meshes)
+	{
+		DrawItem d;
+		d.vertexBuffer = &mesh.vb;
+		d.indexBuffer = &mesh.ib;
+		d.albedo = mesh.albedo.IsValid() ? &mesh.albedo : &m_defaultTexture;
+		d.object = m_modelObject;
+		m_renderScene.draws.push_back(d);
+	}
+
+	m_renderScene.envMap = &m_envMap;
+	m_renderScene.irradianceMap = &m_irradianceMap;
+	m_renderScene.specularMap = &m_specularMap;
+
+	m_renderScene.post.exposure = m_exposure;
+	m_renderScene.post.bloomThreshold = m_bloomThreshold;
+	m_renderScene.post.bloomStrength = m_bloomStrength;
+	m_renderScene.post.bloomBlurCount = m_bloomBlurCount;
+
+	m_renderScene.viewport = m_viewport;
+	m_renderScene.scissor = m_scissorRect;
 }
 
 void MyEngine::OnRender()
@@ -295,8 +238,8 @@ void MyEngine::OnDestroy()
 {
 	WaitForGpuIdle();
 	m_releaseQueue.Flush();
-	
-	ImGui_ImplDX12_Shutdown();
+
+	m_uiPass.Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
@@ -306,117 +249,68 @@ void MyEngine::OnDestroy()
 void MyEngine::PopulateCommandList()
 {
 	FrameContext& frame = m_frames[m_frameIndex];
-
-	// 이 할당자를 쓴 이전 프레임은 MoveToNextFrame에서 이미 끝났음이 보장됨
 	ThrowIfFailed(frame.allocator->Reset());
-	ThrowIfFailed(m_commandList->Reset(frame.allocator.Get(), m_pipelineState.Get()));
+	ThrowIfFailed(m_commandList->Reset(frame.allocator.Get(), nullptr));
+	m_uploadAlloc.BeginFrame(m_frameIndex);
 
-	m_uploadAlloc.BeginFrame(m_frameIndex);      // ← 이번 프레임 영역을 처음부터 사용
+	ID3D12GraphicsCommandList* cmd = m_commandList.Get();
+	const RenderScene& scene = m_renderScene;
 
-	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+	RenderTargets targets;
+	targets.sceneColor = &m_sceneColor;
+	targets.depth = &m_depth;
+	targets.backBuffer = &m_swapChain.CurrentBackBuffer();
+	targets.backBufferRtv = m_swapChain.CurrentRtv();
+	targets.width = m_width;
+	targets.height = m_height;
 
-	ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Heap()};
-	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
-	m_commandList->SetGraphicsRootConstantBufferView(RP_Frame, m_uploadAlloc.Push(m_frameConstants));
-	m_commandList->SetGraphicsRootConstantBufferView(RP_Material, m_uploadAlloc.Push(m_material));
-	m_commandList->SetGraphicsRootDescriptorTable(RP_EnvMap, m_envMap.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(RP_Irradiance, m_irradianceMap.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(RP_Specular, m_specularMap.srv.gpu);
-	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	m_commandList->RSSetViewports(1, &m_viewport);
-	
-	m_commandList->RSSetScissorRects(1, &m_scissorRect);
-
-	m_sceneColor.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_commandList->OMSetRenderTargets(1, &m_sceneColor.rtv.cpu, FALSE, &m_depth.dsv.cpu);
-	m_commandList->ClearRenderTargetView(m_sceneColor.rtv.cpu, m_sceneColor.ClearColor(), 0, nullptr);
-	m_commandList->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
-	// ── 스카이박스 ──
-	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
-	m_commandList->SetGraphicsRootConstantBufferView(RP_Object, m_uploadAlloc.Push(m_skyboxObject));
-	D3D12_VERTEX_BUFFER_VIEW skyVbv = m_skyboxVB.VertexView();
-	D3D12_INDEX_BUFFER_VIEW  skyIbv = m_skyboxIB.IndexView();
-	m_commandList->IASetVertexBuffers(0, 1, &skyVbv);
-	m_commandList->IASetIndexBuffer(&skyIbv);
-	m_commandList->DrawIndexedInstanced(m_skyboxIB.Count(), 1, 0, 0, 0);
-	
-	// ── 모델 ──
-	m_commandList->SetPipelineState(m_pipelineState.Get());
-	m_commandList->SetGraphicsRootConstantBufferView(RP_Object, m_uploadAlloc.Push(m_modelObject));
-
-	for (const Mesh& mesh : m_meshes) {
-		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
-		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
-		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
-		m_commandList->SetGraphicsRootDescriptorTable(RP_Tex0, albedo.srv.gpu);
-		m_commandList->IASetVertexBuffers(0, 1, &vbv);
-		m_commandList->IASetIndexBuffer(&ibv);
-		m_commandList->DrawIndexedInstanced(mesh.ib.Count(), 1, 0, 0, 0);
-	}
-
-	// 씬 텍스처: RT → SRV
-	m_sceneColor.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-	// ── 후처리 공통 설정 ──
-	CD3DX12_VIEWPORT bloomVp(0.0f, 0.0f, float(m_bloomWidth), float(m_bloomHeight));
-	CD3DX12_RECT bloomRect(0, 0, LONG(m_bloomWidth), LONG(m_bloomHeight));
-	m_commandList->RSSetViewports(1, &bloomVp);
-	m_commandList->RSSetScissorRects(1, &bloomRect);
-
-	// 블룸 패스 하나: target에 src를 읽어서 그림
-	auto bloomPass = [&](ID3D12PipelineState* pso, Texture& target, const Texture& src, const hlsl::PostConstants& c)
+	RenderContext ctx{ cmd, &m_uploadAlloc, &scene, &targets };
+	auto run = [&](RenderPass& pass)
 		{
-			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-			m_commandList->OMSetRenderTargets(1, &target.rtv.cpu, FALSE, nullptr);
-			m_commandList->SetPipelineState(pso);
-			m_commandList->SetGraphicsRoot32BitConstants(RP_PassConstants, kPostConstantCount, &c, 0);
-			m_commandList->SetGraphicsRootDescriptorTable(RP_Tex0, src.srv.gpu);
-			m_commandList->DrawInstanced(3, 1, 0, 0);
-			target.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			GpuMarker marker(cmd, pass.Name());     // PIX에서 패스 이름으로 묶임
+			pass.Execute(ctx);
 		};
 
-	hlsl::PostConstants pc{};
-	pc.invSize = Vector2(1.0f / m_bloomWidth, 1.0f / m_bloomHeight);
-	pc.threshold = m_bloomThreshold;
-	pc.strength = m_bloomStrength;
-	pc.exposure = m_exposure;
+	// ════ 프레임 공통 바인딩 (모든 패스의 전제) ════
+	cmd->SetGraphicsRootSignature(m_rootSignature.Get());
+	ID3D12DescriptorHeap* heaps[] = { m_srvHeap.Heap() };
+	cmd->SetDescriptorHeaps(_countof(heaps), heaps);
+	cmd->SetGraphicsRootConstantBufferView(RP_Frame, m_uploadAlloc.Push(scene.frame));
+	cmd->SetGraphicsRootDescriptorTable(RP_EnvMap, scene.envMap->srv.gpu);
+	cmd->SetGraphicsRootDescriptorTable(RP_Irradiance, scene.irradianceMap->srv.gpu);
+	cmd->SetGraphicsRootDescriptorTable(RP_Specular, scene.specularMap->srv.gpu);
+	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	bloomPass(m_brightPSO.Get(), m_bloom[0], m_sceneColor, pc);
-	for (int i = 0; i < m_bloomBlurCount; ++i)
+	// ════ 씬 (HDR) ════
 	{
-		pc.direction = Vector2(1.0f, 0.0f);
-		bloomPass(m_blurPSO.Get(), m_bloom[1], m_bloom[0], pc);
-		pc.direction = Vector2(0.0f, 1.0f);
-		bloomPass(m_blurPSO.Get(), m_bloom[0], m_bloom[1], pc);
+		GpuMarker marker(cmd, L"Scene");
+		m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		cmd->OMSetRenderTargets(1, &m_sceneColor.rtv.cpu, FALSE, &m_depth.dsv.cpu);
+		cmd->ClearRenderTargetView(m_sceneColor.rtv.cpu, m_sceneColor.ClearColor(), 0, nullptr);
+		cmd->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+		cmd->RSSetViewports(1, &scene.viewport);
+		cmd->RSSetScissorRects(1, &scene.scissor);
+
+		run(m_skyboxPass);
+		run(m_forwardPass);
+
+		m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	}
 
-	// 3) Combine: scene + bloom[0] → 백버퍼
-	GpuResource& backBuffer = m_swapChain.CurrentBackBuffer();
-	backBuffer.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-	D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_swapChain.CurrentRtv();
+	// ════ 후처리 ════
+	run(m_bloomPass);
+	targets.bloom = &m_bloomPass.Output();
 
-	m_commandList->OMSetRenderTargets(1, &rtv, FALSE, &m_depth.dsv.cpu);   // ImGui PSO의 DSV 포맷과 맞춤
-	m_commandList->ClearRenderTargetView(rtv, kSceneClear, 0, nullptr);   // GUI 영역 배경
+	// ════ 백버퍼 (LDR) ════
+	targets.backBuffer->Transition(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	cmd->OMSetRenderTargets(1, &targets.backBufferRtv, FALSE, &m_depth.dsv.cpu);   // DSV는 ImGui PSO 포맷과 맞추기 위함
+	cmd->ClearRenderTargetView(targets.backBufferRtv, kSceneClear, 0, nullptr);    // GUI 영역 배경
 
-	m_commandList->RSSetViewports(1, &m_viewport);
-	m_commandList->RSSetScissorRects(1, &m_scissorRect);
+	run(m_tonemapPass);
+	run(m_uiPass);            // ⚠ 항상 마지막 (ImGui가 루트 시그니처를 바꿈)
 
-	pc.invSize = Vector2(1.0f / m_width, 1.0f / m_height);
-	m_commandList->SetPipelineState(m_combinePSO.Get());
-	m_commandList->SetGraphicsRoot32BitConstants(RP_PassConstants, kPostConstantCount, &pc, 0);
-	m_commandList->SetGraphicsRootDescriptorTable(RP_Tex0, m_sceneColor.srv.gpu);
-	m_commandList->SetGraphicsRootDescriptorTable(RP_Tex1, m_bloom[0].srv.gpu);
-	m_commandList->DrawInstanced(3, 1, 0, 0);
-
-	// ImGui: 박스 다음, Present 배리어 전
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
-
-	backBuffer.Transition(m_commandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
-
-	ThrowIfFailed(m_commandList->Close());
+	targets.backBuffer->Transition(cmd, D3D12_RESOURCE_STATE_PRESENT);
+	ThrowIfFailed(cmd->Close());
 }
 
 void MyEngine::MoveToNextFrame()
@@ -523,13 +417,32 @@ void MyEngine::OnSizeChanged(UINT width, UINT height, bool minimized)
 	if (!m_swapChain.IsValid() || minimized || width == 0 || height == 0)
 		return;
 
-	// 1. GPU가 현재 백버퍼를 다 쓸 때까지 대기
 	WaitForGpuIdle();                   // 진행 중인 2프레임 모두 끝날 때까지
 	m_swapChain.Resize(width, height);
-
 	UpdateForSizeChange(width, height); 
 	UpdateSceneViewport();
+	CreateSizeDependentTargets(width, height);
+}
 
-	m_depth.CreateDepth(m_gfx.Device(), m_dsvHeap, m_width, m_height, DXGI_FORMAT_D32_FLOAT, L"SceneDepth");
-	CreatePostTargets(width, height);
+RenderInitContext MyEngine::MakeInitContext()
+{
+	RenderInitContext c;
+	c.device = m_gfx.Device();
+	c.queue = m_gfx.Queue();
+	c.rootSignature = m_rootSignature.Get();
+	c.rtvHeap = &m_rtvHeap;
+	c.dsvHeap = &m_dsvHeap;
+	c.srvHeap = &m_srvHeap;
+	c.backBufferFormat = m_swapChain.Format();
+	c.frameCount = FrameCount;
+	return c;
+}
+
+void MyEngine::CreateSizeDependentTargets(UINT width, UINT height)
+{
+	RenderInitContext ctx = MakeInitContext();
+	m_depth.CreateDepth(ctx.device, m_dsvHeap, width, height, kDepthFormat, L"SceneDepth");
+	m_sceneColor.CreateRenderTarget(ctx.device, m_rtvHeap, m_srvHeap,
+		width, height, kHdrFormat, kSceneClear, L"SceneColor");
+	m_bloomPass.Resize(ctx, width, height);
 }

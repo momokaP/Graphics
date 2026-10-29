@@ -161,6 +161,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DXSample.cpp" />
+    <ClCompile Include="Engine\Renderer\Passes\BloomPass.cpp" />
+    <ClCompile Include="Engine\Renderer\Passes\ForwardPass.cpp" />
+    <ClCompile Include="Engine\Renderer\Passes\SkyboxPass.cpp" />
+    <ClCompile Include="Engine\Renderer\Passes\TonemapPass.cpp" />
+    <ClCompile Include="Engine\Renderer\Passes\UIPass.cpp" />
     <ClCompile Include="Engine\RHI\DescriptorHeap.cpp" />
     <ClCompile Include="Engine\RHI\GpuBuffer.cpp" />
     <ClCompile Include="Engine\RHI\GpuResource.cpp" />
@@ -181,6 +186,16 @@
   <ItemGroup>
     <ClInclude Include="DXSample.h" />
     <ClInclude Include="DXSampleHelper.h" />
+    <ClInclude Include="Engine\Renderer\GpuMarker.h" />
+    <ClInclude Include="Engine\Renderer\Passes\BloomPass.h" />
+    <ClInclude Include="Engine\Renderer\Passes\ForwardPass.h" />
+    <ClInclude Include="Engine\Renderer\Passes\SkyboxPass.h" />
+    <ClInclude Include="Engine\Renderer\Passes\TonemapPass.h" />
+    <ClInclude Include="Engine\Renderer\Passes\UIPass.h" />
+    <ClInclude Include="Engine\Renderer\RenderContext.h" />
+    <ClInclude Include="Engine\Renderer\RenderPass.h" />
+    <ClInclude Include="Engine\Renderer\RenderTypes.h" />
+    <ClInclude Include="Engine\Renderer\RenderScene.h" />
     <ClInclude Include="Engine\RHI\DeferredReleaseQueue.h" />
     <ClInclude Include="Engine\RHI\DescriptorHeap.h" />
     <ClInclude Include="Engine\RHI\GpuBuffer.h" />

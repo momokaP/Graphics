@@ -112,6 +112,16 @@ namespace hlsl
         m.rimColor = float3(1.0f);  m.useSmoothstep = 0;
         return m;
     }
+
+ 
+    inline ObjectConstants MakeObjectConstants(const float4x4& world)
+    {
+        ObjectConstants o;
+        o.world = world;
+        o.worldInvTranspose = world.Invert().Transpose();
+        return o;
+    }
+    
 }
 #endif
 
