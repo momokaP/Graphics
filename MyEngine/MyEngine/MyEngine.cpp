@@ -3,12 +3,22 @@
 #include <filesystem>
 #include <chrono>
 
+namespace
+{
+	hlsl::ObjectConstants MakeObjectConstants(const Matrix& world)
+	{
+		hlsl::ObjectConstants o;
+		o.world = world;
+		// 노멀은 w=0이라 평행이동은 영향 없음 → 역행렬의 전치만 하면 됨 (비균일 스케일에서도 노멀이 올바름)
+		o.worldInvTranspose = world.Invert().Transpose();
+		return o;
+	}
+}
+
 MyEngine::MyEngine(UINT width, UINT height, std::wstring name) :
 	DXSample(width, height, name),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
-	m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
-	m_BasicVertexConstantBufferData(),
-	m_BasicPixelConstantBufferData()
+	m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height))
 {
 }
 
@@ -80,8 +90,9 @@ void MyEngine::LoadAssets()
 {
 	{
 		RootSignatureBuilder rs;
-		rs.CBV(1, D3D12_SHADER_VISIBILITY_VERTEX)                              // RP_VSConstants (b1)
-			.CBV(0, D3D12_SHADER_VISIBILITY_PIXEL)                               // RP_PSConstants (b0)
+		rs.CBV(0, D3D12_SHADER_VISIBILITY_ALL)       // RP_Frame: VS(viewProj) + PS(eyeWorld, lights)가 같이 읽음
+			.CBV(1, D3D12_SHADER_VISIBILITY_VERTEX)    // RP_Object
+			.CBV(2, D3D12_SHADER_VISIBILITY_PIXEL)     // RP_Material                            // RP_PSConstants (b0)
 			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL,
 				D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC)                      // RP_Albedo
 			.Table(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, D3D12_SHADER_VISIBILITY_PIXEL,
@@ -115,7 +126,6 @@ void MyEngine::LoadAssets()
 	{
 		auto vs = LoadShader(Paths::Shader(L"VertexShader.cso"));
 		auto ps = LoadShader(Paths::Shader(L"PixelShader.cso"));
-		auto skyVs = LoadShader(Paths::Shader(L"CubeMappingVertexShader.cso"));
 		auto skyPs = LoadShader(Paths::Shader(L"CubeMappingPixelShader.cso"));
 
 		m_pipelineState = PipelineBuilder(m_rootSignature.Get())
@@ -125,7 +135,7 @@ void MyEngine::LoadAssets()
 			.Build(m_gfx.Device(), L"Forward PSO");
 
 		m_cubeMapPipelineState = PipelineBuilder(m_rootSignature.Get())
-			.VS(skyVs).PS(skyPs).InputLayout(kVertexLayout)
+			.VS(vs).PS(skyPs).InputLayout(kVertexLayout)
 			.RenderTarget(kHdrFormat).DepthFormat(DXGI_FORMAT_D32_FLOAT)
 			.Cull(D3D12_CULL_MODE_NONE).DepthWrite(false)        // ← 두 PSO의 유일한 차이가 한눈에 보임
 			.Build(m_gfx.Device(), L"Skybox PSO");
@@ -243,66 +253,34 @@ void MyEngine::OnUpdate(float dt)
 {
 	using namespace DirectX;
 
-	// 모델의 변환
-	m_BasicVertexConstantBufferData.model =
+	// ── 프레임 상수: 카메라 ──
+	const Matrix view = Matrix::CreateRotationY(m_viewRot) * Matrix::CreateTranslation(0.0f, 0.0f, 2.0f);
+	const Matrix proj = m_usePerspectiveProjection
+		? Matrix(XMMatrixPerspectiveFovLH(XMConvertToRadians(m_projFovAngleY), m_sceneAspect, m_nearZ, m_farZ))
+		: Matrix(XMMatrixOrthographicOffCenterLH(-m_sceneAspect, m_sceneAspect, -1.0f, 1.0f, m_nearZ, m_farZ));
+
+	m_frameConstants.view = view;
+	m_frameConstants.proj = proj;
+	m_frameConstants.viewProj = view * proj;                               // 행벡터 규약: v * V * P
+	m_frameConstants.eyeWorld = Vector3::Transform(Vector3::Zero, view.Invert());
+
+	// ── 프레임 상수: 조명 (선택한 1개만 켬) ──
+	for (int i = 0; i < MAX_LIGHTS; ++i)
+		m_frameConstants.lights[i] = (i == m_lightType) ? m_lightFromGUI : hlsl::Light{};   // 꺼진 조명은 0
+
+	// ── 오브젝트 상수 ──
+	const Matrix world =
 		Matrix::CreateScale(m_modelScaling) *
 		Matrix::CreateRotationY(m_modelRotation.y) *
 		Matrix::CreateRotationX(m_modelRotation.x) *
 		Matrix::CreateRotationZ(m_modelRotation.z) *
 		Matrix::CreateTranslation(m_modelTranslation);
-	m_BasicVertexConstantBufferData.model =
-		m_BasicVertexConstantBufferData.model.Transpose();
+	m_modelObject = MakeObjectConstants(world);
+	m_skyboxObject = MakeObjectConstants(Matrix::CreateScale(20.0f));
 
-	m_BasicVertexConstantBufferData.invTranspose =
-		m_BasicVertexConstantBufferData.model;
-	m_BasicVertexConstantBufferData.invTranspose.Translation(Vector3(0.0f));
-	m_BasicVertexConstantBufferData.invTranspose =
-		m_BasicVertexConstantBufferData.invTranspose.Transpose().Invert();
-
-	// 시점 변환
-	m_BasicVertexConstantBufferData.view =
-		Matrix::CreateRotationY(m_viewRot) *
-		Matrix::CreateTranslation(0.0f, 0.0f, 2.0f);
-
-	m_BasicPixelConstantBufferData.eyeWorld = Vector3::Transform(
-		Vector3(0.0f), m_BasicVertexConstantBufferData.view.Invert());
-
-	m_BasicVertexConstantBufferData.view =
-		m_BasicVertexConstantBufferData.view.Transpose();
-
-	// 프로젝션
-	const float aspect = m_sceneAspect; // <- GUI에서 조절
-	if (m_usePerspectiveProjection) {
-		m_BasicVertexConstantBufferData.projection = XMMatrixPerspectiveFovLH(
-			XMConvertToRadians(m_projFovAngleY), aspect, m_nearZ, m_farZ);
-	}
-	else {
-		m_BasicVertexConstantBufferData.projection =
-			XMMatrixOrthographicOffCenterLH(-aspect, aspect, -1.0f, 1.0f,
-				m_nearZ, m_farZ);
-	}
-	m_BasicVertexConstantBufferData.projection =
-		m_BasicVertexConstantBufferData.projection.Transpose();
-
-	m_BasicPixelConstantBufferData.material.diffuse =
-		Vector3(m_materialDiffuse);
-	m_BasicPixelConstantBufferData.material.specular =
-		Vector3(m_materialSpecular);
-
-	// 여러 개 조명 사용 예시
-	for (int i = 0; i < MAX_LIGHTS; i++) {
-		// 다른 조명 끄기
-		if (i != m_lightType) {
-			m_BasicPixelConstantBufferData.lights[i].strength *= 0.0f;
-		}
-		else {
-			m_BasicPixelConstantBufferData.lights[i] = m_lightFromGUI;
-		}
-	}
-
-	m_skyboxVertexConstantBufferData = m_BasicVertexConstantBufferData;
-	m_skyboxVertexConstantBufferData.model = Matrix::CreateScale(20.0f).Transpose();
-	m_skyboxVertexConstantBufferData.invTranspose = Matrix();  // 스카이박스는 노멀 안 씀
+	// ── 머티리얼 상수 ──
+	m_material.diffuse = Vector3(m_materialDiffuse);
+	m_material.specular = Vector3(m_materialSpecular);
 }
 
 void MyEngine::OnRender()
@@ -344,8 +322,8 @@ void MyEngine::PopulateCommandList()
 	ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Heap()};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	m_commandList->SetGraphicsRootConstantBufferView(RP_PSConstants,
-		m_uploadAlloc.Push(m_BasicPixelConstantBufferData));
+	m_commandList->SetGraphicsRootConstantBufferView(RP_Frame, m_uploadAlloc.Push(m_frameConstants));
+	m_commandList->SetGraphicsRootConstantBufferView(RP_Material, m_uploadAlloc.Push(m_material));
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	
@@ -364,8 +342,7 @@ void MyEngine::PopulateCommandList()
 	
 	// ── 스카이박스 ──
 	m_commandList->SetPipelineState(m_cubeMapPipelineState.Get());
-	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants,
-		m_uploadAlloc.Push(m_skyboxVertexConstantBufferData));
+	m_commandList->SetGraphicsRootConstantBufferView(RP_Object, m_uploadAlloc.Push(m_skyboxObject));
 	m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, m_envMap.srv.gpu);
 	D3D12_VERTEX_BUFFER_VIEW skyVbv = m_skyboxVB.VertexView();
 	D3D12_INDEX_BUFFER_VIEW  skyIbv = m_skyboxIB.IndexView();
@@ -375,30 +352,8 @@ void MyEngine::PopulateCommandList()
 	
 	// ── 모델 ──
 	m_commandList->SetPipelineState(m_pipelineState.Get());
+	m_commandList->SetGraphicsRootConstantBufferView(RP_Object, m_uploadAlloc.Push(m_modelObject));
 
-	//const float offsets[] = { -0.6f, +0.6f };
-	//for (float x : offsets)
-	//{
-	//	BasicVertexConstantBuffer cb = m_BasicVertexConstantBufferData;
-	//	Matrix world = cb.model.Transpose()                       // 저장된 건 전치된 값이라 되돌림
-	//		* Matrix::CreateTranslation(x, 0.0f, 0.0f);
-	//	cb.model = world.Transpose();
-	//	// invTranspose는 평행이동에 영향받지 않으므로 그대로 둬도 됨
-
-	//	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants, m_uploadAlloc.Push(cb));
-	//	for (const Mesh& mesh : m_meshes) {
-	//		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
-	//		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
-	//		D3D12_INDEX_BUFFER_VIEW  ibv = mesh.ib.IndexView();
-	//		m_commandList->SetGraphicsRootDescriptorTable(RP_Albedo, albedo.srv.gpu);
-	//		m_commandList->IASetVertexBuffers(0, 1, &vbv);
-	//		m_commandList->IASetIndexBuffer(&ibv);
-	//		m_commandList->DrawIndexedInstanced(mesh.ib.Count(), 1, 0, 0, 0);
-	//	}
-	//}
-
-	m_commandList->SetGraphicsRootConstantBufferView(RP_VSConstants,
-		m_uploadAlloc.Push(m_BasicVertexConstantBufferData));	
 	for (const Mesh& mesh : m_meshes) {
 		const Texture& albedo = mesh.albedo.IsValid() ? mesh.albedo : m_defaultTexture;
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh.vb.VertexView();
@@ -513,19 +468,19 @@ void MyEngine::UpdateGUI()
 	ImGui::SliderInt("Bloom Blur Count", &m_bloomBlurCount, 0, 8);
 
 	ImGui::SliderFloat("Rim Strength",
-		&m_BasicPixelConstantBufferData.rimStrength, 0.0f,
+		&m_material.rimStrength, 0.0f,
 		10.0f);
-	bool useSmoothstep = m_BasicPixelConstantBufferData.useSmoothstep != 0;
+	bool useSmoothstep = m_material.useSmoothstep != 0;
 	if (ImGui::Checkbox("Use Smoothstep", &useSmoothstep))
-		m_BasicPixelConstantBufferData.useSmoothstep = useSmoothstep ? 1u : 0u;
-	ImGui::SliderFloat3("Rim Color", &m_BasicPixelConstantBufferData.rimColor.x,
+		m_material.useSmoothstep = useSmoothstep ? 1u : 0u;
+	ImGui::SliderFloat3("Rim Color", &m_material.rimColor.x,
 		0.0f, 1.0f);
-	ImGui::SliderFloat("Rim Power", &m_BasicPixelConstantBufferData.rimPower,
+	ImGui::SliderFloat("Rim Power", &m_material.rimPower,
 		0.01f, 10.0f);
 
-	bool useTexture = m_BasicPixelConstantBufferData.useTexture != 0;
+	bool useTexture = m_material.useTexture != 0;
 	if (ImGui::Checkbox("Use Texture", &useTexture))
-		m_BasicPixelConstantBufferData.useTexture = useTexture ? 1u : 0u;
+		m_material.useTexture = useTexture ? 1u : 0u;
 	ImGui::SliderFloat3("m_modelTranslation", &m_modelTranslation.x, -2.0f,
 		2.0f);
 	ImGui::SliderFloat3("m_modelRotation", &m_modelRotation.x, -3.14f, 3.14f);
@@ -533,10 +488,10 @@ void MyEngine::UpdateGUI()
 	ImGui::SliderFloat("m_viewRot", &m_viewRot, -3.14f, 3.14f);
 
 	ImGui::SliderFloat3("Material FresnelR0",
-		&m_BasicPixelConstantBufferData.material.fresnelR0.x,
+		&m_material.fresnelR0.x,
 		0.0f, 1.0f);
 	ImGui::SliderFloat("Material Shininess",
-		&m_BasicPixelConstantBufferData.material.shininess, 1.0f,
+		&m_material.shininess, 1.0f,
 		256.0f);
 
 	if (ImGui::RadioButton("Directional Light", m_lightType == 0)) {

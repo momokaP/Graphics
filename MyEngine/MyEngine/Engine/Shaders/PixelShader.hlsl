@@ -1,34 +1,7 @@
-#define MAX_LIGHTS 3 // 쉐이더에서도 #define 사용 가능
-#define NUM_DIR_LIGHTS 1
-#define NUM_POINT_LIGHTS 1
-#define NUM_SPOT_LIGHTS 1
-
-// 재질
-struct Material
-{
-    float3 ambient;
-    float shininess;
-    float3 diffuse;
-    float dummy1; // 16 bytes 맞춰주기 위해 추가
-    float3 specular;
-    float dummy2;
-    float3 fresnelR0;
-    float dummy3;
-};
-
-// 조명
-struct Light
-{
-    float3 strength;
-    float fallOffStart;
-    float3 direction;
-    float fallOffEnd;
-    float3 position;
-    float spotPower;
-};
+#include "SceneCommon.hlsli"
 
 float3 BlinnPhong(float3 lightStrength, float3 lightVec, float3 normal,
-                   float3 toEye, Material mat)
+                   float3 toEye, MaterialConstants mat)
 {
     float3 halfway = normalize(toEye + lightVec);
     float hdotn = dot(halfway, normal);
@@ -37,7 +10,7 @@ float3 BlinnPhong(float3 lightStrength, float3 lightVec, float3 normal,
     return mat.ambient + (mat.diffuse + specular) * lightStrength;
 }
 
-float3 ComputeDirectionalLight(Light L, Material mat, float3 normal,
+float3 ComputeDirectionalLight(Light L, MaterialConstants mat, float3 normal,
                                 float3 toEye)
 {
     float3 lightVec = -L.direction;
@@ -56,7 +29,7 @@ float CalcAttenuation(float d, float falloffStart, float falloffEnd)
     return saturate((falloffEnd - d) / (falloffEnd - falloffStart));
 }
 
-float3 ComputePointLight(Light L, Material mat, float3 pos, float3 normal,
+float3 ComputePointLight(Light L, MaterialConstants mat, float3 pos, float3 normal,
                           float3 toEye)
 {
     float3 lightVec = L.position - pos;
@@ -83,7 +56,7 @@ float3 ComputePointLight(Light L, Material mat, float3 pos, float3 normal,
     }
 }
 
-float3 ComputeSpotLight(Light L, Material mat, float3 pos, float3 normal,
+float3 ComputeSpotLight(Light L, MaterialConstants mat, float3 pos, float3 normal,
                          float3 toEye)
 {
     float3 lightVec = L.position - pos;
@@ -115,27 +88,6 @@ float3 ComputeSpotLight(Light L, Material mat, float3 pos, float3 normal,
     // if에 else가 없을 경우 경고 발생
     // warning X4000: use of potentially uninitialized variable
 }
-
-cbuffer BasicPixelConstantBuffer : register(b0)
-{
-    float3 eyeWorld;
-    uint useTexture;
-    Material material;
-    Light light[MAX_LIGHTS];
-    float3 rimColor;
-    float rimPower;
-    float rimStrength;
-    uint useSmoothstep;
-};
-
-struct PSInput
-{
-    float4 posProj : SV_POSITION; // Screen position
-    float3 posWorld : POSITION; // World position (조명 계산에 사용)
-    float3 normalWorld : NORMAL;
-    float2 texcoord : TEXCOORD;
-    float3 color : COLOR; // Normal lines 쉐이더에서 사용
-};
 
 Texture2D g_texture0 : register(t0);
 TextureCube g_textureCube : register(t1);
@@ -177,7 +129,9 @@ float3 SchlickFresnel(float3 fresnelR0, float3 normal, float3 toEye)
 
 float4 main(PSInput input) : SV_TARGET
 {   
-    float3 toEye = normalize(eyeWorld - input.posWorld);
+    const MaterialConstants material = g_material;
+    
+    float3 toEye = normalize(g_frame.eyeWorld - input.posWorld);
 
     float3 color = float3(0.0, 0.0, 0.0);
     
@@ -189,30 +143,28 @@ float4 main(PSInput input) : SV_TARGET
     [unroll] // warning X3557: loop only executes for 1 iteration(s), forcing loop to unroll
     for (i = 0; i < NUM_DIR_LIGHTS; ++i)
     {
-        color += ComputeDirectionalLight(light[i], material, input.normalWorld, toEye);
+        color += ComputeDirectionalLight(g_frame.lights[i], material, input.normalWorld, toEye);
     }
     
     [unroll]
     for (i = NUM_DIR_LIGHTS; i < NUM_DIR_LIGHTS + NUM_POINT_LIGHTS; ++i)
     {
-        color += ComputePointLight(light[i], material, input.posWorld, input.normalWorld, toEye);
+        color += ComputePointLight(g_frame.lights[i], material, input.posWorld, input.normalWorld, toEye);
     }
     
     [unroll]
     for (i = NUM_DIR_LIGHTS + NUM_POINT_LIGHTS; i < NUM_DIR_LIGHTS + NUM_POINT_LIGHTS + NUM_SPOT_LIGHTS; ++i)
     {
-        color += ComputeSpotLight(light[i], material, input.posWorld, input.normalWorld, toEye);
+        color += ComputeSpotLight(g_frame.lights[i], material, input.posWorld, input.normalWorld, toEye);
     }
     
     //return float4(color, 1.0);
     float rim = (1.0 - dot(input.normalWorld, toEye));
     
-    if (useSmoothstep)
+    if (material.useSmoothstep)
         rim = smoothstep(0.0, 1.0, rim);
-    
-    rim = pow(abs(rim), rimPower);
-    
-    color += rim * rimColor * rimStrength;
+    rim = pow(abs(rim), material.rimPower);
+    color += rim * material.rimColor * material.rimStrength;
 
     // return g_textureCube0.Sample(g_linearSampler, reflect(-toEye, input.normalWorld));
     
@@ -230,7 +182,7 @@ float4 main(PSInput input) : SV_TARGET
         float3 irradiance = g_textureCubeDiffuse.Sample(g_linearSampler, N).rgb;
         float3 prefiltered = g_textureCubeSpecular.SampleLevel(g_linearSampler, R, lod).rgb;
 
-        float3 albedo = useTexture ? g_texture0.Sample(g_linearSampler, input.texcoord).rgb
+        float3 albedo = material.useTexture ? g_texture0.Sample(g_linearSampler, input.texcoord).rgb
                                : float3(1.0, 1.0, 1.0);
         float3 F = SchlickFresnel(material.fresnelR0, N, toEye);
 

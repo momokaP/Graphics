@@ -17,6 +17,8 @@
 #include "Vertex.h"
 #include "Paths.h"
 
+#include "Shaders/ShaderInterop.h"
+
 using namespace DirectX;
 
 using Microsoft::WRL::ComPtr;
@@ -43,51 +45,6 @@ public:
 private:
 	static const UINT FrameCount = 2;
 
-	struct BasicVertexConstantBuffer
-	{
-		Matrix model;
-		Matrix invTranspose;
-		Matrix view;
-		Matrix projection;
-	};
-	static_assert((sizeof(BasicVertexConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
-
-	// 재질
-	struct Material {
-		Vector3 ambient = Vector3(0.0f);  // 12
-		float shininess = 1.0f;           // 4
-		Vector3 diffuse = Vector3(0.5f);  // 12
-		float dummy1;                     // 4
-		Vector3 specular = Vector3(0.5f); // 12
-		float dummy2;                     // 4
-		Vector3 fresnelR0 = Vector3(1.0f, 0.71f, 0.29f); // Gold
-		float dummy3;
-	};
-
-	// 조명
-	struct Light {
-		Vector3 strength = Vector3(1.0f);              // 12
-		float fallOffStart = 0.0f;                     // 4
-		Vector3 direction = Vector3(0.0f, 0.0f, 1.0f); // 12
-		float fallOffEnd = 10.0f;                      // 4
-		Vector3 position = Vector3(0.0f, 0.0f, -2.0f); // 12
-		float spotPower = 1.0f;                        // 4
-	};
-
-#define MAX_LIGHTS 3
-	struct BasicPixelConstantBuffer {
-		Vector3 eyeWorld;
-		uint32_t useTexture;
-		Material material;
-		Light lights[MAX_LIGHTS]; // 48 * MAX_LIGHTS
-		Vector3 rimColor = Vector3(1.0f);
-		float rimPower;
-		float rimStrength = 0.0f;
-		uint32_t useSmoothstep = false;
-		float padding[2];
-	};
-	static_assert((sizeof(BasicPixelConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
-
 	struct Mesh {
 		GpuBuffer vb, ib;
 		Texture   albedo;          // 없으면 IsValid() == false → 기본 텍스처 사용
@@ -111,12 +68,13 @@ private:
 
 	DescriptorHeap m_rtvHeap, m_dsvHeap, m_srvHeap;   // srv = CBV/SRV/UAV (shader-visible)
 
-	BasicVertexConstantBuffer m_BasicVertexConstantBufferData;
-
-	BasicPixelConstantBuffer m_BasicPixelConstantBufferData;
+	hlsl::FrameConstants    m_frameConstants{};
+	hlsl::ObjectConstants   m_modelObject{};
+	hlsl::ObjectConstants   m_skyboxObject{};
+	hlsl::MaterialConstants m_material = hlsl::DefaultMaterial();
 
 	int m_lightType = 0;
-	Light m_lightFromGUI;
+	hlsl::Light m_lightFromGUI = hlsl::DefaultLight();
 	float m_materialDiffuse = 0.7f;
 	float m_materialSpecular = 0.2f;
 
@@ -152,8 +110,6 @@ private:
 	void LoadAssets();
 	void PopulateCommandList();
 
-	BasicVertexConstantBuffer m_skyboxVertexConstantBufferData;  // 같은 구조체 타입
-
 	static constexpr DXGI_FORMAT kHdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
 	UINT m_bloomWidth = 1, m_bloomHeight = 1;
@@ -179,12 +135,13 @@ private:
 	int   m_bloomBlurCount = 2;
 
 	enum MainRootParam : UINT {
-		RP_VSConstants = 0,   // 루트 CBV: VS b1 (BasicVertexConstantBuffer)
-		RP_PSConstants,       // 루트 CBV: PS b0 (BasicPixelConstantBuffer)
-		RP_Albedo,            // 테이블: t0
-		RP_EnvMap,            // 테이블: t1
-		RP_Irradiance,        // 테이블: t2
-		RP_Specular,          // 테이블: t3
+		RP_Frame = 0,      // 루트 CBV b0 (VS+PS)
+		RP_Object,         // 루트 CBV b1 (VS)
+		RP_Material,       // 루트 CBV b2 (PS)
+		RP_Albedo,         // t0
+		RP_EnvMap,         // t1
+		RP_Irradiance,     // t2
+		RP_Specular,       // t3
 		RP_MainCount
 	};
 	enum PostRootParam : UINT {

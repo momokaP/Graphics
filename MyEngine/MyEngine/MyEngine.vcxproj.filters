@@ -134,37 +134,38 @@
     <ClInclude Include="Engine\RHI\LinearUploadAllocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Shaders\ShaderInterop.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="PostCommon.hlsli">
+    <None Include="Engine\Shaders\PostCommon.hlsli">
       <Filter>Assets\Shaders</Filter>
     </None>
     <None Include="imgui.ini" />
+    <None Include="Engine\Shaders\SceneCommon.hlsli" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="VertexShader.hlsl">
+    <FxCompile Include="Engine\Shaders\VertexShader.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="PixelShader.hlsl">
+    <FxCompile Include="Engine\Shaders\PixelShader.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="CubeMappingVertexShader.hlsl">
+    <FxCompile Include="Engine\Shaders\CubeMappingPixelShader.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="CubeMappingPixelShader.hlsl">
+    <FxCompile Include="Engine\Shaders\FullscreenVS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="FullscreenVS.hlsl">
+    <FxCompile Include="Engine\Shaders\BloomBrightPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="BloomBrightPS.hlsl">
+    <FxCompile Include="Engine\Shaders\BloomBlurPS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="BloomBlurPS.hlsl">
-      <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="BloomCombinePS.hlsl">
+    <FxCompile Include="Engine\Shaders\BloomCombinePS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
   </ItemGroup>
