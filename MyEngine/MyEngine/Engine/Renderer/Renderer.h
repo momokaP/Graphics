@@ -1,0 +1,101 @@
+#pragma once
+#include <functional>
+#include <wrl.h>
+
+#include "RHI/GraphicsDevice.h"
+#include "RHI/DescriptorHeap.h"
+#include "RHI/SwapChain.h"
+#include "RHI/Texture.h"
+#include "RHI/LinearUploadAllocator.h"
+#include "RHI/DeferredReleaseQueue.h"
+
+#include "Renderer/RenderContext.h"
+#include "Renderer/Passes/SkyboxPass.h"
+#include "Renderer/Passes/ForwardPass.h"
+#include "Renderer/Passes/BloomPass.h"
+#include "Renderer/Passes/TonemapPass.h"
+#include "Renderer/Passes/UIPass.h"
+
+struct RenderScene;
+namespace DirectX { class ResourceUploadBatch; }
+
+class Renderer
+{
+public:
+    static constexpr UINT kFrameCount = 2;
+
+    struct Desc
+    {
+        HWND hwnd = nullptr;
+        UINT width = 0;
+        UINT height = 0;
+        bool useWarp = false;
+    };
+
+    Renderer() = default;
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+
+    // ── 생명주기 ──
+    void Init(const Desc& desc);
+    void InitUI();                              // ImGui 컨텍스트 + Win32 백엔드 초기화 뒤에 호출
+    void Shutdown();                            // GPU 대기 → UI → 리소스 정리
+
+    void Resize(UINT width, UINT height);
+    void Render(const RenderScene& scene);      // 기록 → 제출 → Present → 다음 프레임
+
+    // ── 에셋 로딩용 (3단계 AssetManager 전까지 앱에 노출) ──
+    void UploadResources(const std::function<void(DirectX::ResourceUploadBatch&)>& record);
+    ID3D12Device* Device() const { return m_gfx.Device(); }
+    DescriptorHeap& SrvHeap() { return m_srvHeap; }
+    void DeferredRelease(Microsoft::WRL::ComPtr<ID3D12Pageable> object);   // GPU가 다 쓴 뒤 해제
+
+    // ── 상태 / 통계 (GUI 표시용) ──
+    bool   IsInitialized() const { return m_initialized; }
+    bool   VSync() const { return m_vsync; }
+    void   SetVSync(bool enable) { m_vsync = enable; }
+    bool   IsTearingSupported() const { return m_swapChain.IsTearingSupported(); }
+    float  LastGpuWaitMs() const { return m_lastGpuWaitMs; }
+    UINT64 UploadBytesUsed() const { return m_uploadAlloc.UsedBytes(); }
+
+private:
+    void CreateRootSignature();
+    void CreateSizeDependentTargets(UINT width, UINT height);
+    RenderInitContext MakeInitContext(DirectX::ResourceUploadBatch* upload = nullptr);
+    void RecordFrame(const RenderScene& scene);   // ← MyEngine::PopulateCommandList
+    void MoveToNextFrame();
+    void WaitForGpuIdle();
+
+    struct FrameContext
+    {
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
+        UINT64 fenceValue = 0;
+    };
+
+    // ⚠ 선언 순서 = 생성 순서, 소멸은 역순 → 디바이스를 맨 앞에 두어 가장 마지막에 정리
+    GraphicsDevice m_gfx;
+    DescriptorHeap m_rtvHeap, m_dsvHeap, m_srvHeap;
+    SwapChain      m_swapChain;
+    FrameContext   m_frames[kFrameCount];
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
+    LinearUploadAllocator m_uploadAlloc;
+    DeferredReleaseQueue  m_releaseQueue;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
+
+    // 여러 패스가 공유하는 렌더 타깃
+    Texture m_sceneColor, m_depth;
+    UINT    m_width = 0, m_height = 0;
+
+    // 패스 (실행 순서대로 선언)
+    SkyboxPass  m_skyboxPass;
+    ForwardPass m_forwardPass;
+    BloomPass   m_bloomPass;
+    TonemapPass m_tonemapPass;
+    UIPass      m_uiPass;
+
+    UINT  m_frameIndex = 0;
+    bool  m_vsync = true;
+    bool  m_initialized = false;
+    bool  m_uiInitialized = false;
+    float m_lastGpuWaitMs = 0.0f;
+};

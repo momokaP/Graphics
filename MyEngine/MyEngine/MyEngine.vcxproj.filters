@@ -19,10 +19,19 @@
     <Filter Include="Assets\Shaders">
       <UniqueIdentifier>{ac5c388b-71c0-47e8-9731-510ef002ceb5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Sandbox">
+      <UniqueIdentifier>{3f6b2c1e-8d4a-4b7e-9c21-5a0d7e6f1b42}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Renderer\Renderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Sandbox\SandboxApp.cpp">
+      <Filter>Sandbox</Filter>
     </ClCompile>
     <ClCompile Include="MyEngine.cpp">
       <Filter>Source Files</Filter>
@@ -94,6 +103,12 @@
     </ClInclude>
     <ClInclude Include="MyEngine.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Renderer\Renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Sandbox\SandboxApp.h">
+      <Filter>Sandbox</Filter>
     </ClInclude>
     <ClInclude Include="DXSample.h">
       <Filter>Header Files</Filter>
