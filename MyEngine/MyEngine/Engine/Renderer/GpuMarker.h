@@ -1,17 +1,17 @@
 #pragma once
 #include <d3d12.h>
-#include <cwchar>
 
-// 범위 기반 GPU 마커: 생성 시 BeginEvent, 소멸 시 EndEvent → PIX/디버거에서 구간 이름으로 보임
-// WinPixEventRuntime 없이 D3D12 기본 API 사용 (metadata 0 = 유니코드 문자열)
+#define USE_PIX            // Release에서도 마커를 쓰려면 명시. 빼면 Debug/Profile에서만 동작
+#include <pix3.h>          // WinPixEventRuntime
+
 class GpuMarker
 {
 public:
     GpuMarker(ID3D12GraphicsCommandList* cmd, const wchar_t* name) : m_cmd(cmd)
     {
-        m_cmd->BeginEvent(0, name, UINT((wcslen(name) + 1) * sizeof(wchar_t)));
+        PIXBeginEvent(m_cmd, PIX_COLOR_DEFAULT, L"%s", name);
     }
-    ~GpuMarker() { m_cmd->EndEvent(); }
+    ~GpuMarker() { PIXEndEvent(m_cmd); } 
 
     GpuMarker(const GpuMarker&) = delete;
     GpuMarker& operator=(const GpuMarker&) = delete;

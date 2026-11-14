@@ -43,6 +43,13 @@ void GraphicsDevice::Init(bool useWarp)
         factoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
     }
 #endif
+
+#if defined(_DEBUG) && ENABLE_GBV
+    ComPtr<ID3D12Debug1> debug1;
+    if (SUCCEEDED(debug.As(&debug1)))
+        debug1->SetEnableGPUBasedValidation(TRUE);
+#endif
+
     ThrowIfFailed(CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&m_factory)));
 
     if (useWarp)
@@ -63,8 +70,10 @@ void GraphicsDevice::Init(bool useWarp)
     ComPtr<ID3D12InfoQueue> infoQueue;
     if (SUCCEEDED(m_device.As(&infoQueue)))
     {
-        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+        // 디버거가 붙어 있을 때만 멈춤. PIX나 exe 단독 실행에서는 로그만 남김
+        const BOOL brk = IsDebuggerPresent();
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, brk);
+        infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, brk);
     }
 #endif
 

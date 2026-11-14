@@ -98,4 +98,6 @@ private:
     bool  m_initialized = false;
     bool  m_uiInitialized = false;
     float m_lastGpuWaitMs = 0.0f;
+
+    float m_dbgPresentMs = 0;
 };

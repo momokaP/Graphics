@@ -109,7 +109,14 @@ void Renderer::Render(const RenderScene& scene)
     ID3D12CommandList* lists[] = { m_commandList.Get() };
     m_gfx.Queue()->ExecuteCommandLists(_countof(lists), lists);
 
+    // m_swapChain.Present(m_vsync);
+
+    // Render() 안, Present 주변 (임시) — Renderer.h에 float m_dbgPresentMs = 0; 추가
+    const auto p0 = std::chrono::high_resolution_clock::now();
     m_swapChain.Present(m_vsync);
+    const auto p1 = std::chrono::high_resolution_clock::now();
+    m_dbgPresentMs = std::chrono::duration<float, std::milli>(p1 - p0).count();
+
     MoveToNextFrame();
 }
 
@@ -134,52 +141,60 @@ void Renderer::RecordFrame(const RenderScene& scene)
     targets.height = m_height;
 
     RenderContext ctx{ cmd, &m_uploadAlloc, &scene, &targets };
-    auto run = [&](RenderPass& pass)
-        {
-            GpuMarker marker(cmd, pass.Name());
-            pass.Execute(ctx);
-        };
 
-    // ════ 프레임 공통 바인딩 (모든 패스의 전제) ════
-    cmd->SetGraphicsRootSignature(m_rootSignature.Get());
-    ID3D12DescriptorHeap* heaps[] = { m_srvHeap.Heap() };
-    cmd->SetDescriptorHeaps(_countof(heaps), heaps);
-    cmd->SetGraphicsRootConstantBufferView(RP_Frame, m_uploadAlloc.Push(scene.frame));
-    cmd->SetGraphicsRootDescriptorTable(RP_EnvMap, scene.envMap->srv.gpu);
-    cmd->SetGraphicsRootDescriptorTable(RP_Irradiance, scene.irradianceMap->srv.gpu);
-    cmd->SetGraphicsRootDescriptorTable(RP_Specular, scene.specularMap->srv.gpu);
-    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    // ════ 씬 (HDR) ════
+    // [임시] 타임라인에서 프레임 구분용. 이 프레임이 받을 fence 값 = 현재 마지막 Signal + 1
+    wchar_t frameName[32];
+    swprintf_s(frameName, L"Frame %llu", m_gfx.NextFenceValue());
     {
-        GpuMarker marker(cmd, L"Scene");
-        m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        cmd->OMSetRenderTargets(1, &m_sceneColor.rtv.cpu, FALSE, &m_depth.dsv.cpu);
-        cmd->ClearRenderTargetView(m_sceneColor.rtv.cpu, m_sceneColor.ClearColor(), 0, nullptr);
-        cmd->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-        cmd->RSSetViewports(1, &scene.viewport);
-        cmd->RSSetScissorRects(1, &scene.scissor);
+        GpuMarker frameMarker(cmd, frameName);
 
-        run(m_skyboxPass);
-        run(m_forwardPass);
+        auto run = [&](RenderPass& pass)
+            {
+                GpuMarker marker(cmd, pass.Name());
+                pass.Execute(ctx);
+            };
 
-        m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        // ════ 프레임 공통 바인딩 (모든 패스의 전제) ════
+        cmd->SetGraphicsRootSignature(m_rootSignature.Get());
+        ID3D12DescriptorHeap* heaps[] = { m_srvHeap.Heap() };
+        cmd->SetDescriptorHeaps(_countof(heaps), heaps);
+        cmd->SetGraphicsRootConstantBufferView(RP_Frame, m_uploadAlloc.Push(scene.frame));
+        cmd->SetGraphicsRootDescriptorTable(RP_EnvMap, scene.envMap->srv.gpu);
+        cmd->SetGraphicsRootDescriptorTable(RP_Irradiance, scene.irradianceMap->srv.gpu);
+        cmd->SetGraphicsRootDescriptorTable(RP_Specular, scene.specularMap->srv.gpu);
+        cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // ════ 씬 (HDR) ════
+        {
+            GpuMarker marker(cmd, L"Scene");
+            m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            cmd->OMSetRenderTargets(1, &m_sceneColor.rtv.cpu, FALSE, &m_depth.dsv.cpu);
+            cmd->ClearRenderTargetView(m_sceneColor.rtv.cpu, m_sceneColor.ClearColor(), 0, nullptr);
+            cmd->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+            cmd->RSSetViewports(1, &scene.viewport);
+            cmd->RSSetScissorRects(1, &scene.scissor);
+
+            run(m_skyboxPass);
+            run(m_forwardPass);
+
+            m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        }
+
+        // ════ 후처리 ════
+        run(m_bloomPass);
+        targets.bloom = &m_bloomPass.Output();
+
+        // ════ 백버퍼 (LDR) ════
+        targets.backBuffer->Transition(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        cmd->OMSetRenderTargets(1, &targets.backBufferRtv, FALSE, &m_depth.dsv.cpu);   // DSV는 ImGui PSO 포맷과 맞추기 위함
+        cmd->ClearRenderTargetView(targets.backBufferRtv, kSceneClear, 0, nullptr);
+
+        run(m_tonemapPass);
+        if (m_uiInitialized)
+            run(m_uiPass);        // ⚠ 항상 마지막 (ImGui가 루트 시그니처를 바꿈)
+
+        targets.backBuffer->Transition(cmd, D3D12_RESOURCE_STATE_PRESENT);
     }
-
-    // ════ 후처리 ════
-    run(m_bloomPass);
-    targets.bloom = &m_bloomPass.Output();
-
-    // ════ 백버퍼 (LDR) ════
-    targets.backBuffer->Transition(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    cmd->OMSetRenderTargets(1, &targets.backBufferRtv, FALSE, &m_depth.dsv.cpu);   // DSV는 ImGui PSO 포맷과 맞추기 위함
-    cmd->ClearRenderTargetView(targets.backBufferRtv, kSceneClear, 0, nullptr);
-
-    run(m_tonemapPass);
-    if (m_uiInitialized)
-        run(m_uiPass);        // ⚠ 항상 마지막 (ImGui가 루트 시그니처를 바꿈)
-
-    targets.backBuffer->Transition(cmd, D3D12_RESOURCE_STATE_PRESENT);
     ThrowIfFailed(cmd->Close());
 }
 
@@ -188,10 +203,33 @@ void Renderer::MoveToNextFrame()
     m_frames[m_frameIndex].fenceValue = m_gfx.Signal();
     m_frameIndex = (m_frameIndex + 1) % kFrameCount;
 
+    // [임시 디버그] 실제로 대기가 일어나는 프레임에서만 멈춤
+    //const UINT64 dbgWaitFor = m_frames[m_frameIndex].fenceValue;
+    //const UINT64 dbgCompleted = m_gfx.CompletedValue();
+    //if (dbgCompleted < dbgWaitFor)
+    //    __debugbreak();   // 브레이크포인트 없이도 디버거가 여기서 멈춤
+
+    // MoveToNextFrame 안, WaitForFence 바로 위 (임시)
+    const UINT64 dbgWaitFor = m_frames[m_frameIndex].fenceValue;
+    const UINT64 dbgCompleted = m_gfx.CompletedValue();
+    static int s_frames = 0, s_waits = 0;
+    ++s_frames;
+    if (dbgCompleted < dbgWaitFor) ++s_waits;
+
     const auto t0 = std::chrono::high_resolution_clock::now();
     m_gfx.WaitForFence(m_frames[m_frameIndex].fenceValue);
     const auto t1 = std::chrono::high_resolution_clock::now();
     m_lastGpuWaitMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+
+    // MoveToNextFrame 끝부분, m_lastGpuWaitMs 계산 뒤 (임시)
+    /*if (s_frames % 300 == 0)
+    {
+        char buf[160];
+        sprintf_s(buf, "[Sync] VSync=%d  fence waits %d/300  lastFenceWait %.3f ms  lastPresent %.3f ms\n",
+            m_vsync, s_waits, m_lastGpuWaitMs, m_dbgPresentMs);
+        OutputDebugStringA(buf);
+        s_waits = 0;
+    }*/
 
     m_releaseQueue.Collect(m_gfx.CompletedValue());
 }
@@ -250,7 +288,7 @@ void Renderer::CreateRootSignature()
     constexpr auto PS = D3D12_SHADER_VISIBILITY_PIXEL;
     constexpr auto SRV = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     constexpr auto VOLATILE = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
-    constexpr auto STATIC = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
+    constexpr auto STATIC = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 
     RootSignatureBuilder rs;
     rs.CBV(0, D3D12_SHADER_VISIBILITY_ALL)            // RP_Frame
