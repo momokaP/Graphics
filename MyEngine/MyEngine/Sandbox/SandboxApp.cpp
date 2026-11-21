@@ -153,6 +153,9 @@ void SandboxApp::BuildRenderScene()
 
 	m_renderScene.viewport = m_viewport;
 	m_renderScene.scissor  = m_scissorRect;
+
+	m_renderScene.showWireFrame = m_wireframe;
+	m_renderScene.tint = m_tint;
 }
 
 void SandboxApp::OnRender()
@@ -185,6 +188,11 @@ void SandboxApp::UpdateSceneViewport()
 
 void SandboxApp::UpdateGUI()
 {
+	bool wireframe = m_wireframe;
+	if (ImGui::Checkbox("Wireframe", &wireframe))
+		m_wireframe = wireframe;
+	ImGui::SliderFloat3("Tint", &m_tint.x, 0.0f, 1.0f);
+
 	ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "SandboxApp (Renderer)");   // 어느 버전인지 표시
 	ImGui::Text("CPU wait for GPU: %.2f ms", m_renderer.LastGpuWaitMs());
 	ImGui::Text("Upload: %.1f KB", m_renderer.UploadBytesUsed() / 1024.0);

@@ -70,6 +70,9 @@ private:
 	float m_nearZ = 0.01f;
 	float m_farZ  = 100.0f;
 	bool  m_usePerspectiveProjection = true;
+	
+	bool  m_wireframe = false;
+	Vector3 m_tint = Vector3(1.0f, 1.0f, 1.0f);
 
 	// ── 후처리 설정 ──
 	float m_exposure       = 1.0f;

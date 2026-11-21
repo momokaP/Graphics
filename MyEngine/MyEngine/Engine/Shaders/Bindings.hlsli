@@ -12,6 +12,7 @@ ConstantBuffer<FrameConstants> g_frame : register(b0);
 ConstantBuffer<ObjectConstants> g_object : register(b1);
 ConstantBuffer<MaterialConstants> g_material : register(b2);
 ConstantBuffer<PostConstants> g_post : register(b3); // 루트 상수도 셰이더에선 상수 버퍼로 보임
+ConstantBuffer<DebugConstants> g_debug : register(b4); // 루트 상수도 셰이더에선 상수 버퍼로 보임
 
 TextureCube g_envMap : register(t4);
 TextureCube g_irradianceMap : register(t5);

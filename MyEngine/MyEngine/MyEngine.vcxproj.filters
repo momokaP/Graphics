@@ -96,6 +96,9 @@
     <ClCompile Include="Engine\Renderer\Passes\UIPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Renderer\Passes\WireframePass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -197,6 +200,9 @@
     <ClInclude Include="Engine\Renderer\Passes\UIPass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Renderer\Passes\WireframePass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -229,6 +235,7 @@
     <FxCompile Include="Engine\Shaders\BloomCombinePS.hlsl">
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Engine\Shaders\WireFramePixelShader.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Copyright.txt" />

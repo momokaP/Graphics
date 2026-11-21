@@ -38,4 +38,7 @@ struct RenderScene
 
     D3D12_VIEWPORT viewport{};   // 씬이 그려질 화면 영역 (GUI 패널 제외)
     D3D12_RECT     scissor{};
+
+    bool showWireFrame = false;
+    hlsl::float3 tint;
 };

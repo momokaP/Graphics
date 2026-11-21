@@ -12,6 +12,7 @@
 #include "Renderer/RenderContext.h"
 #include "Renderer/Passes/SkyboxPass.h"
 #include "Renderer/Passes/ForwardPass.h"
+#include "Renderer/Passes/WireframePass.h"
 #include "Renderer/Passes/BloomPass.h"
 #include "Renderer/Passes/TonemapPass.h"
 #include "Renderer/Passes/UIPass.h"
@@ -89,6 +90,7 @@ private:
     // 패스 (실행 순서대로 선언)
     SkyboxPass  m_skyboxPass;
     ForwardPass m_forwardPass;
+    WireframePass m_wireframePass;
     BloomPass   m_bloomPass;
     TonemapPass m_tonemapPass;
     UIPass      m_uiPass;

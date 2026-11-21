@@ -24,7 +24,8 @@ public:
     PipelineBuilder& DepthWrite(bool enable);
     PipelineBuilder& AlphaBlend();                        // 0번 RT에 일반 알파 블렌딩
     PipelineBuilder& Topology(D3D12_PRIMITIVE_TOPOLOGY_TYPE type);
-
+    PipelineBuilder& FillMode(D3D12_FILL_MODE fill);
+    PipelineBuilder& DepthBias(INT bias, FLOAT slopeScaled);
     Microsoft::WRL::ComPtr<ID3D12PipelineState> Build(ID3D12Device* device, const wchar_t* name);
 
 private:

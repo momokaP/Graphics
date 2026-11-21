@@ -2,6 +2,8 @@
 #include "RHI/GraphicsDevice.h"
 #include "DXSampleHelper.h"   // ThrowIfFailed
 
+#define ENABLE_GBV 0   // [2-A 임시] GPU-based validation
+
 using Microsoft::WRL::ComPtr;
 
 static bool IsUsableAdapter(IDXGIAdapter1* adapter)

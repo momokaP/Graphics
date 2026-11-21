@@ -76,6 +76,15 @@ struct PostConstants
     float  _pad;
 };
 
+// b4: 디버그 파라미터 (루트 상수 8개 = 32 B)
+struct DebugConstants
+{
+    float3 tint; // 틴트 또는 와이어 프레임 색깔 
+    float time; 
+    float2 mouse; 
+    float2 _pad;
+};
+
 INTEROP_END
 
 // ───────────────────── C++ 전용: 레이아웃 검증 + 기본값 ─────────────────────
@@ -90,6 +99,7 @@ namespace hlsl
     static_assert(offsetof(MaterialConstants, rimColor) == 64, "MaterialConstants layout");
     static_assert(sizeof(MaterialConstants) == 80, "MaterialConstants layout");
     static_assert(sizeof(PostConstants) == 32, "PostConstants: 루트 상수 8개");
+    static_assert(sizeof(DebugConstants) == 32, "DebugConstants: 루트 상수 8개");
 
     // HLSL은 기본값(= 1.0f 같은 멤버 초기화)을 못 쓰므로 C++ 함수로 제공
     inline Light DefaultLight()

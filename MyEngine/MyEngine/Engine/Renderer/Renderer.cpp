@@ -58,6 +58,7 @@ void Renderer::Init(const Desc& desc)
             RenderInitContext ctx = MakeInitContext(&upload);
             m_skyboxPass.Init(ctx);
             m_forwardPass.Init(ctx);
+            m_wireframePass.Init(ctx);
             m_bloomPass.Init(ctx);
             m_tonemapPass.Init(ctx);
         });
@@ -175,7 +176,14 @@ void Renderer::RecordFrame(const RenderScene& scene)
             cmd->RSSetScissorRects(1, &scene.scissor);
 
             run(m_skyboxPass);
-            run(m_forwardPass);
+
+            if (scene.showWireFrame) {
+                run(m_forwardPass);
+                run(m_wireframePass);
+            }
+            else {
+                run(m_forwardPass);
+            }
 
             m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         }
@@ -295,6 +303,7 @@ void Renderer::CreateRootSignature()
         .CBV(1, D3D12_SHADER_VISIBILITY_VERTEX)         // RP_Object
         .CBV(2, PS)                                     // RP_Material
         .Constants(kPostConstantCount, 3, PS)           // RP_PassConstants
+        .Constants(kDebugConstantCount, 4, PS)          // RP_Debug
         .Table(SRV, 1, 0, PS, VOLATILE)                 // RP_Tex0
         .Table(SRV, 1, 1, PS, VOLATILE)                 // RP_Tex1
         .Table(SRV, 1, 2, PS, VOLATILE)                 // RP_Tex2

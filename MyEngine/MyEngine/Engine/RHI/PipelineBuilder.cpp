@@ -59,6 +59,15 @@ PipelineBuilder& PipelineBuilder::AlphaBlend()
 
 PipelineBuilder& PipelineBuilder::Topology(D3D12_PRIMITIVE_TOPOLOGY_TYPE type) { m_desc.PrimitiveTopologyType = type; return *this; }
 
+PipelineBuilder& PipelineBuilder::FillMode(D3D12_FILL_MODE desc) { m_desc.RasterizerState.FillMode = desc; return *this; }
+
+PipelineBuilder& PipelineBuilder::DepthBias(INT bias, FLOAT slopeScaled)
+{
+    m_desc.RasterizerState.DepthBias = bias;                  // 음수 = 카메라 쪽으로 당김 (깊이 1.0 클리어 + LESS 기준)
+    m_desc.RasterizerState.SlopeScaledDepthBias = slopeScaled;
+    return *this;
+}
+
 Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineBuilder::Build(ID3D12Device* device, const wchar_t* name)
 {
     // 깊이 버퍼가 없는데 깊이 테스트가 켜져 있으면 디버그 레이어 에러 → 자동으로 끔
