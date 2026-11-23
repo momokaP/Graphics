@@ -176,6 +176,7 @@
     <ClCompile Include="Engine\RHI\RootSignatureBuilder.cpp" />
     <ClCompile Include="Engine\RHI\SwapChain.cpp" />
     <ClCompile Include="Engine\RHI\Texture.cpp" />
+    <ClCompile Include="Engine\Scene\Camera.cpp" />
     <ClCompile Include="GeometryGenerator.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Engine\Renderer\Renderer.cpp" />
@@ -201,6 +202,7 @@
     <ClInclude Include="Engine\Renderer\RenderTypes.h" />
     <ClInclude Include="Engine\Renderer\RenderScene.h" />
     <ClInclude Include="Engine\Renderer\Renderer.h" />
+    <ClInclude Include="Engine\Scene\Camera.h" />
     <ClInclude Include="Sandbox\SandboxApp.h" />
     <ClInclude Include="Engine\RHI\DeferredReleaseQueue.h" />
     <ClInclude Include="Engine\RHI\DescriptorHeap.h" />

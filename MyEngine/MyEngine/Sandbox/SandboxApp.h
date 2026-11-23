@@ -14,6 +14,7 @@
 #include "RHI/Texture.h"
 #include "RHI/GpuBuffer.h"
 #include "Shaders/ShaderInterop.h"
+#include "Scene/Camera.h"
 
 class SandboxApp : public DXSample
 {
@@ -64,11 +65,8 @@ private:
 	Vector3 m_modelTranslation = Vector3(0.0f);
 	Vector3 m_modelRotation    = Vector3(-0.6f, 1.0f, 0.0f);
 	Vector3 m_modelScaling     = Vector3(0.5f);
-	float   m_viewRot = 0.0f;
-
-	float m_projFovAngleY = 70.0f;
-	float m_nearZ = 0.01f;
-	float m_farZ  = 100.0f;
+	
+	Camera m_camera;
 	bool  m_usePerspectiveProjection = true;
 	
 	bool  m_wireframe = false;

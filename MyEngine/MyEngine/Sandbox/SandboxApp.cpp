@@ -96,15 +96,30 @@ void SandboxApp::OnUpdate(float dt)
 	using namespace DirectX;
 
 	// ── 프레임 상수: 카메라 ──
-	const Matrix view = Matrix::CreateRotationY(m_viewRot) * Matrix::CreateTranslation(0.0f, 0.0f, 2.0f);
-	const Matrix proj = m_usePerspectiveProjection
-		? Matrix(XMMatrixPerspectiveFovLH(XMConvertToRadians(m_projFovAngleY), m_sceneAspect, m_nearZ, m_farZ))
-		: Matrix(XMMatrixOrthographicOffCenterLH(-m_sceneAspect, m_sceneAspect, -1.0f, 1.0f, m_nearZ, m_farZ));
-
+	CameraInput in;
+	const ImGuiIO& io = ImGui::GetIO();
+	if (!io.WantCaptureKeyboard)
+	{
+		in.forward = float(ImGui::IsKeyDown(ImGuiKey_W)) - float(ImGui::IsKeyDown(ImGuiKey_S));
+		in.right = float(ImGui::IsKeyDown(ImGuiKey_D)) - float(ImGui::IsKeyDown(ImGuiKey_A));
+		in.up = float(ImGui::IsKeyDown(ImGuiKey_E)) - float(ImGui::IsKeyDown(ImGuiKey_Q));
+		in.fast = io.KeyShift;
+	}
+	if (!io.WantCaptureMouse && ImGui::IsMouseDown(ImGuiMouseButton_Right))
+	{
+		in.look = true;
+		in.mouseDx = io.MouseDelta.x;
+		in.mouseDy = io.MouseDelta.y;
+	}
+	m_camera.SetAspect(m_sceneAspect);
+	m_camera.Update(dt, in);
+	
+	const Matrix view = m_camera.View();
+	const Matrix proj = m_camera.Proj(m_usePerspectiveProjection);
 	m_frameConstants.view     = view;
 	m_frameConstants.proj     = proj;
 	m_frameConstants.viewProj = view * proj;                               // 행벡터 규약: v * V * P
-	m_frameConstants.eyeWorld = Vector3::Transform(Vector3::Zero, view.Invert());
+	m_frameConstants.eyeWorld = m_camera.Position();
 
 	// ── 프레임 상수: 조명 (선택한 1개만 켬) ──
 	for (int i = 0; i < MAX_LIGHTS; ++i)
@@ -221,7 +236,6 @@ void SandboxApp::UpdateGUI()
 	ImGui::SliderFloat3("m_modelTranslation", &m_modelTranslation.x, -2.0f, 2.0f);
 	ImGui::SliderFloat3("m_modelRotation", &m_modelRotation.x, -3.14f, 3.14f);
 	ImGui::SliderFloat3("m_modelScaling", &m_modelScaling.x, 0.1f, 2.0f);
-	ImGui::SliderFloat("m_viewRot", &m_viewRot, -3.14f, 3.14f);
 
 	ImGui::SliderFloat3("Material FresnelR0", &m_material.fresnelR0.x, 0.0f, 1.0f);
 	ImGui::SliderFloat("Material Shininess", &m_material.shininess, 1.0f, 256.0f);
