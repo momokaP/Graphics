@@ -18,9 +18,11 @@ void WireframePass::Init(const RenderInitContext& ctx)
     m_pso = PipelineBuilder(ctx.rootSignature)
         .VS(vs).PS(ps).InputLayout(kVertexLayout)
         .RenderTarget(kHdrFormat).DepthFormat(kDepthFormat)
-        .Cull(D3D12_CULL_MODE_NONE)
+        .Cull(D3D12_CULL_MODE_NONE)                      
         .FillMode(D3D12_FILL_MODE_WIREFRAME)
-        .DepthBias(-1000, -1.0f)
+        .DepthTest(true, D3D12_COMPARISON_FUNC_LESS_EQUAL)
+        .DepthWrite(false)                               
+        .DepthBias(-100, 0.0f)                            
         .Build(ctx.device, L"Wireframe PSO");
 }
 

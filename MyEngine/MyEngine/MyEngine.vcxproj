@@ -161,6 +161,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DXSample.cpp" />
+    <ClCompile Include="Engine\Assets\AssetManager.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\BloomPass.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\ForwardPass.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\SkyboxPass.cpp" />
@@ -190,6 +191,8 @@
   <ItemGroup>
     <ClInclude Include="DXSample.h" />
     <ClInclude Include="DXSampleHelper.h" />
+    <ClInclude Include="Engine\Assets\AssetHandle.h" />
+    <ClInclude Include="Engine\Assets\AssetManager.h" />
     <ClInclude Include="Engine\Renderer\GpuMarker.h" />
     <ClInclude Include="Engine\Renderer\Passes\BloomPass.h" />
     <ClInclude Include="Engine\Renderer\Passes\ForwardPass.h" />
@@ -203,6 +206,8 @@
     <ClInclude Include="Engine\Renderer\RenderScene.h" />
     <ClInclude Include="Engine\Renderer\Renderer.h" />
     <ClInclude Include="Engine\Scene\Camera.h" />
+    <ClInclude Include="Engine\Scene\Scene.h" />
+    <ClInclude Include="Engine\Scene\Transform.h" />
     <ClInclude Include="Sandbox\SandboxApp.h" />
     <ClInclude Include="Engine\RHI\DeferredReleaseQueue.h" />
     <ClInclude Include="Engine\RHI\DescriptorHeap.h" />

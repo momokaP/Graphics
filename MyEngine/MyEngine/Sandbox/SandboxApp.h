@@ -15,6 +15,8 @@
 #include "RHI/GpuBuffer.h"
 #include "Shaders/ShaderInterop.h"
 #include "Scene/Camera.h"
+#include "Scene/Scene.h"
+#include "Assets/AssetManager.h"
 
 class SandboxApp : public DXSample
 {
@@ -40,33 +42,21 @@ private:
 
 	// ── 렌더러 ── (에셋보다 먼저 선언 → 에셋보다 나중에 소멸)
 	Renderer    m_renderer;
+	AssetManager m_assets; // ⚠ Renderer 다음에 선언 → 먼저 소멸. Renderer::Shutdown이 GPU를 이미 비운 뒤라 안전
 	RenderScene m_renderScene;
 
-	// ── 에셋 (3단계 AssetManager로 이동 예정) ──
-	struct Mesh
-	{
-		GpuBuffer vb, ib;
-		Texture   albedo;     // 없으면 IsValid() == false → 기본 텍스처 사용
-	};
-	std::vector<Mesh> m_meshes;
-	Texture m_defaultTexture;
-	Texture m_envMap, m_irradianceMap, m_specularMap;
+	TextureHandle m_envMap, m_irradianceMap, m_specularMap;
 
 	// ── 씬 데이터 (3단계 Scene으로 이동 예정) ──
+	Scene m_scene;
+	int m_selected = 0;
+	
 	hlsl::FrameConstants    m_frameConstants{};
-	hlsl::ObjectConstants   m_modelObject{};
 	hlsl::MaterialConstants m_material = hlsl::DefaultMaterial();
 
-	int         m_lightType = 0;
-	hlsl::Light m_lightFromGUI = hlsl::DefaultLight();
 	float m_materialDiffuse  = 0.7f;
 	float m_materialSpecular = 0.2f;
 
-	Vector3 m_modelTranslation = Vector3(0.0f);
-	Vector3 m_modelRotation    = Vector3(-0.6f, 1.0f, 0.0f);
-	Vector3 m_modelScaling     = Vector3(0.5f);
-	
-	Camera m_camera;
 	bool  m_usePerspectiveProjection = true;
 	
 	bool  m_wireframe = false;

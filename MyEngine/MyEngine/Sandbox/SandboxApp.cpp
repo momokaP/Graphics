@@ -34,43 +34,36 @@ void SandboxApp::OnInit()
 
 void SandboxApp::LoadAssets()
 {
-	ID3D12Device* device = m_renderer.Device();
+	m_assets.Init(m_renderer.Device(), &m_renderer.SrvHeap());
 
-	m_renderer.UploadResources([&](DirectX::ResourceUploadBatch& upload)
+	MeshHandle box, sphere, ground;
+	m_renderer.UploadResources([&](DirectX::ResourceUploadBatch& up)
 		{
-			// 기본 텍스처
-			m_defaultTexture.LoadWIC(device, upload, Paths::Asset(L"Textures/kotone.png"), true);
+			m_assets.SetDefaultTexture(m_assets.LoadTexture(up, Paths::Asset(L"Textures/kotone.png"), true));
 
-			// 모델
-			MeshData meshData = GeometryGenerator::MakeBox();
-			std::vector<MeshData> meshDatas;
-			meshDatas.push_back(meshData); // = GeometryGenerator::ReadFromFile(Paths::Asset(L"Models/zaku2/zaku2_1.fbx"));
-			m_meshes.resize(meshDatas.size());     // 크기를 미리 확정해 재할당 방지
-			for (size_t i = 0; i < meshDatas.size(); ++i)
-			{
-				const MeshData& md = meshDatas[i];
-				Mesh& mesh = m_meshes[i];
-				mesh.vb.CreateVertexBuffer(device, upload, md.vertices, L"Mesh VB");
-				mesh.ib.CreateIndexBuffer(device, upload, md.indices, L"Mesh IB");
-				if (!md.albedoTexturePath.empty() && std::filesystem::exists(md.albedoTexturePath))
-					mesh.albedo.LoadWIC(device, upload, md.albedoTexturePath, true);
-			}
+			box = m_assets.CreateMesh(up, GeometryGenerator::MakeBox(), L"Box");
+			sphere = m_assets.CreateMesh(up, GeometryGenerator::MakeSphere(1.0f, 32, 16), L"Sphere");
+			ground = m_assets.CreateMesh(up, GeometryGenerator::MakeSquare(), L"Ground");
 
-			// IBL 큐브맵
 			const auto ibl = Paths::Asset(L"DayEnvironmentHDRI057Brdf");
-			m_envMap.LoadDDS(device, upload, ibl / L"DayEnvironmentHDRI057EnvHDR.dds");
-			m_irradianceMap.LoadDDS(device, upload, ibl / L"DayEnvironmentHDRI057DiffuseHDR.dds");
-			m_specularMap.LoadDDS(device, upload, ibl / L"DayEnvironmentHDRI057SpecularHDR.dds");
+			m_envMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057EnvHDR.dds", false);
+			m_irradianceMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057DiffuseHDR.dds", false);
+			m_specularMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057SpecularHDR.dds", false);
 		});
+	m_assets.FinalizeUploads();      // 업로드가 끝난 뒤 SRV 생성
 
-	// SRV는 업로드가 끝난 뒤 (UploadResources가 반환하면 끝난 상태)
-	DescriptorHeap& srvHeap = m_renderer.SrvHeap();
-	m_defaultTexture.CreateSrv(device, srvHeap);
-	for (Mesh& mesh : m_meshes)
-		if (mesh.albedo.IsValid()) mesh.albedo.CreateSrv(device, srvHeap);
-	m_envMap.CreateSrv(device, srvHeap);
-	m_irradianceMap.CreateSrv(device, srvHeap);
-	m_specularMap.CreateSrv(device, srvHeap);
+	Transform t;
+	t.position = { -0.8f, 0.0f, 0.0f }; t.scale = Vector3(0.4f);
+	m_scene.Add("Box", box, t);
+
+	t = {};
+	t.position = { 0.8f, 0.0f, 0.0f }; t.scale = Vector3(0.4f);
+	m_scene.Add("Sphere", sphere, t);
+
+	t = {};
+	t.position = { 0.0f, -0.5f, 0.0f }; t.rotation.x = DirectX::XM_PIDIV2; t.scale = Vector3(3.0f);
+	m_scene.Add("Ground", ground, t);
+	// MakeSquare가 XY 평면이면 X축 90도로 눕힘. 방향이 반대면 -XM_PIDIV2
 }
 
 void SandboxApp::InitGUI()
@@ -111,28 +104,19 @@ void SandboxApp::OnUpdate(float dt)
 		in.mouseDx = io.MouseDelta.x;
 		in.mouseDy = io.MouseDelta.y;
 	}
-	m_camera.SetAspect(m_sceneAspect);
-	m_camera.Update(dt, in);
+	m_scene.camera.SetAspect(m_sceneAspect);
+	m_scene.camera.Update(dt, in);
 	
-	const Matrix view = m_camera.View();
-	const Matrix proj = m_camera.Proj(m_usePerspectiveProjection);
+	const Matrix view = m_scene.camera.View();
+	const Matrix proj = m_scene.camera.Proj(m_usePerspectiveProjection);
 	m_frameConstants.view     = view;
 	m_frameConstants.proj     = proj;
 	m_frameConstants.viewProj = view * proj;                               // 행벡터 규약: v * V * P
-	m_frameConstants.eyeWorld = m_camera.Position();
+	m_frameConstants.eyeWorld = m_scene.camera.Position();
 
 	// ── 프레임 상수: 조명 (선택한 1개만 켬) ──
 	for (int i = 0; i < MAX_LIGHTS; ++i)
-		m_frameConstants.lights[i] = (i == m_lightType) ? m_lightFromGUI : hlsl::Light{};   // 꺼진 조명은 0
-
-	// ── 오브젝트 상수 ──
-	const Matrix world =
-		Matrix::CreateScale(m_modelScaling) *
-		Matrix::CreateRotationY(m_modelRotation.y) *
-		Matrix::CreateRotationX(m_modelRotation.x) *
-		Matrix::CreateRotationZ(m_modelRotation.z) *
-		Matrix::CreateTranslation(m_modelTranslation);
-	m_modelObject = hlsl::MakeObjectConstants(world);
+		m_frameConstants.lights[i] = (i == m_scene.lightType) ? m_scene.light : hlsl::Light{};   // 꺼진 조명은 0
 
 	// ── 머티리얼 상수 ──
 	m_material.diffuse  = Vector3(m_materialDiffuse);
@@ -147,19 +131,22 @@ void SandboxApp::BuildRenderScene()
 	m_renderScene.material = m_material;
 
 	m_renderScene.draws.clear();     // capacity는 유지 → 매 프레임 재할당 없음
-	for (const Mesh& mesh : m_meshes)
+	for (const Entity& e : m_scene.entities)
 	{
+		if (!e.visible || !e.mesh.IsValid()) continue;
+		const Mesh& mesh = m_assets.GetMesh(e.mesh);
+
 		DrawItem d;
 		d.vertexBuffer = &mesh.vb;
 		d.indexBuffer  = &mesh.ib;
-		d.albedo       = mesh.albedo.IsValid() ? &mesh.albedo : &m_defaultTexture;
-		d.object       = m_modelObject;
+		d.albedo = &m_assets.GetTexture(mesh.albedo);
+		d.object       = hlsl::MakeObjectConstants(e.transform.World());   // ← 물체마다 다른 행렬
 		m_renderScene.draws.push_back(d);
 	}
 
-	m_renderScene.envMap        = &m_envMap;
-	m_renderScene.irradianceMap = &m_irradianceMap;
-	m_renderScene.specularMap   = &m_specularMap;
+	m_renderScene.envMap        = &m_assets.GetTexture(m_envMap);
+	m_renderScene.irradianceMap = &m_assets.GetTexture(m_irradianceMap);
+	m_renderScene.specularMap   = &m_assets.GetTexture(m_specularMap);
 
 	m_renderScene.post.exposure       = m_exposure;
 	m_renderScene.post.bloomThreshold = m_bloomThreshold;
@@ -233,27 +220,35 @@ void SandboxApp::UpdateGUI()
 	bool useTexture = m_material.useTexture != 0;
 	if (ImGui::Checkbox("Use Texture", &useTexture))
 		m_material.useTexture = useTexture ? 1u : 0u;
-	ImGui::SliderFloat3("m_modelTranslation", &m_modelTranslation.x, -2.0f, 2.0f);
-	ImGui::SliderFloat3("m_modelRotation", &m_modelRotation.x, -3.14f, 3.14f);
-	ImGui::SliderFloat3("m_modelScaling", &m_modelScaling.x, 0.1f, 2.0f);
+	
+	ImGui::SliderInt("Entity", &m_selected, 0, int(m_scene.entities.size()) - 1);
+	if (!m_scene.entities.empty())
+	{
+		Entity& e = m_scene.entities[m_selected];
+		ImGui::Text("%s", e.name.c_str());
+		ImGui::Checkbox("Visivle", &e.visible);
+		ImGui::DragFloat3("Position", &e.transform.position.x, 0.01f, -10.0f, 10.0f);
+		ImGui::DragFloat3("Rotation", &e.transform.rotation.x, 0.01f, -3.14f, 3.14f);
+		ImGui::DragFloat3("Scale", &e.transform.scale.x, 0.01f, 0.01f, 10.0f);
+	}
 
 	ImGui::SliderFloat3("Material FresnelR0", &m_material.fresnelR0.x, 0.0f, 1.0f);
 	ImGui::SliderFloat("Material Shininess", &m_material.shininess, 1.0f, 256.0f);
 
-	if (ImGui::RadioButton("Directional Light", m_lightType == 0)) m_lightType = 0;
+	if (ImGui::RadioButton("Directional Light", m_scene.lightType == 0)) m_scene.lightType = 0;
 	ImGui::SameLine();
-	if (ImGui::RadioButton("Point Light", m_lightType == 1)) m_lightType = 1;
+	if (ImGui::RadioButton("Point Light", m_scene.lightType == 1)) m_scene.lightType = 1;
 	ImGui::SameLine();
-	if (ImGui::RadioButton("Spot Light", m_lightType == 2)) m_lightType = 2;
+	if (ImGui::RadioButton("Spot Light", m_scene.lightType == 2)) m_scene.lightType = 2;
 
 	ImGui::SliderFloat("Material Diffuse", &m_materialDiffuse, 0.0f, 1.0f);
 	ImGui::SliderFloat("Material Specular", &m_materialSpecular, 0.0f, 1.0f);
 
-	ImGui::SliderFloat3("Light Strength", &m_lightFromGUI.strength.x, 0.0f, 5.0f);
-	ImGui::SliderFloat3("Light Position", &m_lightFromGUI.position.x, -5.0f, 5.0f);
-	ImGui::SliderFloat("Light fallOffStart", &m_lightFromGUI.fallOffStart, 0.0f, 5.0f);
-	ImGui::SliderFloat("Light fallOffEnd", &m_lightFromGUI.fallOffEnd, 0.0f, 10.0f);
-	ImGui::SliderFloat("Light spotPower", &m_lightFromGUI.spotPower, 1.0f, 512.0f);
+	ImGui::SliderFloat3("Light Strength", &m_scene.light.strength.x, 0.0f, 5.0f);
+	ImGui::SliderFloat3("Light Position", &m_scene.light.position.x, -5.0f, 5.0f);
+	ImGui::SliderFloat("Light fallOffStart", &m_scene.light.fallOffStart, 0.0f, 5.0f);
+	ImGui::SliderFloat("Light fallOffEnd", &m_scene.light.fallOffEnd, 0.0f, 10.0f);
+	ImGui::SliderFloat("Light spotPower", &m_scene.light.spotPower, 1.0f, 512.0f);
 
 	int newWidth = int(ImGui::GetWindowWidth());
 	if (newWidth != m_guiWidth)
