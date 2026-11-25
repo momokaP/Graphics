@@ -13,6 +13,7 @@ struct DrawItem
     const GpuBuffer* indexBuffer = nullptr;
     const Texture* albedo = nullptr;   // 없으면 기본 텍스처를 넣어서 전달
     hlsl::ObjectConstants object{};
+    hlsl::MaterialConstants material{};
 };
 
 struct PostSettings
@@ -27,7 +28,6 @@ struct PostSettings
 struct RenderScene
 {
     hlsl::FrameConstants    frame{};
-    hlsl::MaterialConstants material{};
     std::vector<DrawItem>   draws;
 
     const Texture* envMap = nullptr;

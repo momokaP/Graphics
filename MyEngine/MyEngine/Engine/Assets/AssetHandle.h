@@ -14,5 +14,7 @@ struct Handle
 
 struct MeshTag;
 struct TextureTag;
+struct MaterialTag;
 using MeshHandle = Handle<MeshTag>;
 using TextureHandle = Handle<TextureTag>;
+using MaterialHandle = Handle<MaterialTag>;

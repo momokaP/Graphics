@@ -13,6 +13,7 @@ void AssetManager::Init(ID3D12Device* device, DescriptorHeap* srvHeap)
 {
 	m_device = device;
 	m_srvHeap = srvHeap;
+	m_defaultMaterial = CreateMaterial({ "Default" }); // 머티리얼 없는 엔티티용
 }
 
 MeshHandle AssetManager::CreateMesh(DirectX::ResourceUploadBatch& up, const MeshData& md, std::wstring name)
@@ -82,7 +83,27 @@ const Mesh& AssetManager::GetMesh(MeshHandle h) const
 
 const Texture& AssetManager::GetTexture(TextureHandle h) const
 {
-	if (!h.IsValid()) h = m_defaultTextue;
+	if (!h.IsValid()) h = m_defaultTexture;
 	assert(h.IsValid() && h.index < m_textures.size() && "잘못된 TextureHandle (기본 텍스쳐도 없음)");
 	return m_textures[h.index];
+}
+
+MaterialHandle AssetManager::CreateMaterial(Material m)
+{
+	m_materials.push_back(std::move(m));
+	return { uint32_t(m_materials.size() - 1) };
+}
+
+const Material& AssetManager::GetMaterial(MaterialHandle h) const
+{
+	if (!h.IsValid()) h = m_defaultMaterial;
+	assert(h.index < m_materials.size() && "잘못된 MaterialHandle");
+	return m_materials[h.index];
+}
+
+Material& AssetManager::EditMaterial(MaterialHandle h)
+{
+	if (!h.IsValid()) h = m_defaultMaterial;
+	assert(h.index < m_materials.size() && "잘못된 MaterialHandle");
+	return m_materials[h.index];
 }

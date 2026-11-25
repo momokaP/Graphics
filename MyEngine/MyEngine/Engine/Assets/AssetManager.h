@@ -7,6 +7,7 @@
 #include "Assets/AssetHandle.h"
 #include "RHI/GpuBuffer.h"
 #include "RHI/Texture.h"
+#include "Shaders/ShaderInterop.h"
 
 struct MeshData;
 class DescriptorHeap;
@@ -17,6 +18,13 @@ struct Mesh
 	std::wstring name;
 	GpuBuffer vb, ib;
 	TextureHandle albedo; // 없으면 invalid → 기본 텍스처
+};
+
+struct Material
+{
+	std::string name;
+	hlsl::MaterialConstants params = hlsl::DefaultMaterial();
+	TextureHandle albedo;
 };
 
 class AssetManager
@@ -36,11 +44,15 @@ public:
 	const Mesh& GetMesh(MeshHandle h) const;
 	const Texture& GetTexture(TextureHandle h) const; // invalid면 기본 텍스처
 
-	void SetDefaultTexture(TextureHandle h) { m_defaultTextue = h; }
-	TextureHandle DefaultTexture() const { return m_defaultTextue; }
+	void SetDefaultTexture(TextureHandle h) { m_defaultTexture = h; }
+	TextureHandle DefaultTexture() const { return m_defaultTexture; }
 
 	size_t MeshCount() const { return m_meshes.size(); }
 	size_t TextureCount() const { return m_textures.size(); }
+
+	MaterialHandle CreateMaterial(Material m);
+	const Material& GetMaterial(MaterialHandle h) const; // invalid면 기본 머티리얼
+	Material& EditMaterial(MaterialHandle h); // 에디터용
 
 private:
 	ID3D12Device* m_device = nullptr;
@@ -48,8 +60,10 @@ private:
 
 	std::deque<Mesh> m_meshes;
 	std::deque<Texture> m_textures;
-	
+	std::deque<Material> m_materials;
+
 	std::unordered_map<std::wstring, TextureHandle> m_textureCache;  // "정규화된 경로|srgb" → 핸들
 	std::vector<TextureHandle> m_pendingSrv; // 업로드 뒤 SRV를 만들 목록
-	TextureHandle m_defaultTextue;
+	TextureHandle m_defaultTexture;
+	MaterialHandle m_defaultMaterial;
 };

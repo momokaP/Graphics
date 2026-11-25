@@ -27,11 +27,11 @@ void ForwardPass::Execute(RenderContext& ctx)
     const RenderScene& scene = *ctx.scene;
 
     cmd->SetPipelineState(m_pso.Get());
-    cmd->SetGraphicsRootConstantBufferView(RP_Material, ctx.upload->Push(scene.material));
 
     for (const DrawItem& d : scene.draws)
     {
         cmd->SetGraphicsRootConstantBufferView(RP_Object, ctx.upload->Push(d.object));
+        cmd->SetGraphicsRootConstantBufferView(RP_Material, ctx.upload->Push(d.material));
         cmd->SetGraphicsRootDescriptorTable(RP_Tex0, d.albedo->srv.gpu);
 
         D3D12_VERTEX_BUFFER_VIEW vbv = d.vertexBuffer->VertexView();

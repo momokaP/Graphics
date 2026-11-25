@@ -196,7 +196,6 @@ void MyEngine::OnUpdate(float dt)
 
 	// ── 렌더러에 넘길 데이터 ──
 	m_renderScene.frame = m_frameConstants;
-	m_renderScene.material = m_material;
 
 	m_renderScene.draws.clear();
 	for (const Mesh& mesh : m_meshes)

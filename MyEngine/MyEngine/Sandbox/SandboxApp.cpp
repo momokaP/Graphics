@@ -46,23 +46,45 @@ void SandboxApp::LoadAssets()
 			ground = m_assets.CreateMesh(up, GeometryGenerator::MakeSquare(), L"Ground");
 
 			const auto ibl = Paths::Asset(L"DayEnvironmentHDRI057Brdf");
-			m_envMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057EnvHDR.dds", false);
-			m_irradianceMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057DiffuseHDR.dds", false);
-			m_specularMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057SpecularHDR.dds", false);
+			m_scene.environment.envMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057EnvHDR.dds", false);
+			m_scene.environment.irradianceMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057DiffuseHDR.dds", false);
+			m_scene.environment.specularMap = m_assets.LoadTexture(up, ibl / L"DayEnvironmentHDRI057SpecularHDR.dds", false);
 		});
 	m_assets.FinalizeUploads();      // 업로드가 끝난 뒤 SRV 생성
 
-	Transform t;
-	t.position = { -0.8f, 0.0f, 0.0f }; t.scale = Vector3(0.4f);
-	m_scene.Add("Box", box, t);
+	Material texturedMat{ "Textured" };
+	texturedMat.params.useTexture = 1;
+	texturedMat.params.diffuse = Vector3(0.8f);
+	texturedMat.params.specular = Vector3(0.2f);
+	const MaterialHandle textured = m_assets.CreateMaterial(texturedMat);
 
-	t = {};
-	t.position = { 0.8f, 0.0f, 0.0f }; t.scale = Vector3(0.4f);
-	m_scene.Add("Sphere", sphere, t);
 
-	t = {};
-	t.position = { 0.0f, -0.5f, 0.0f }; t.rotation.x = DirectX::XM_PIDIV2; t.scale = Vector3(3.0f);
-	m_scene.Add("Ground", ground, t);
+	Material shinyMat{ "Shiny" };
+	shinyMat.params.diffuse = Vector3(0.9f, 0.3f, 0.2f);
+	shinyMat.params.specular = Vector3(1.0f);
+	shinyMat.params.shininess = 128.0f;
+	const MaterialHandle shiny = m_assets.CreateMaterial(shinyMat);
+
+	Material matteMat("Matte");
+	matteMat.params.diffuse = Vector3(0.5f);
+	matteMat.params.specular = Vector3(0.0f);
+	const MaterialHandle matte = m_assets.CreateMaterial(matteMat);
+
+	Transform tBox;
+	tBox.position = { -0.8f, 0.0f, 0.0f };
+	tBox.scale = Vector3(0.4f);
+	m_scene.Add("Box", box, textured, tBox);
+
+	Transform tSphere;
+	tSphere.position = { 0.8f, 0.0f, 0.0f };
+	tSphere.scale = Vector3(0.4f);
+	m_scene.Add("Sphere", sphere, shiny, tSphere);
+
+	Transform tGround;
+	tGround.position = { 0.0f, -0.5f, 0.0f };
+	tGround.rotation.x = DirectX::XM_PIDIV2;
+	tGround.scale = Vector3(3.0f);
+	m_scene.Add("Ground", ground, matte, tGround);
 	// MakeSquare가 XY 평면이면 X축 90도로 눕힘. 방향이 반대면 -XM_PIDIV2
 }
 
@@ -107,57 +129,9 @@ void SandboxApp::OnUpdate(float dt)
 	m_scene.camera.SetAspect(m_sceneAspect);
 	m_scene.camera.Update(dt, in);
 	
-	const Matrix view = m_scene.camera.View();
-	const Matrix proj = m_scene.camera.Proj(m_usePerspectiveProjection);
-	m_frameConstants.view     = view;
-	m_frameConstants.proj     = proj;
-	m_frameConstants.viewProj = view * proj;                               // 행벡터 규약: v * V * P
-	m_frameConstants.eyeWorld = m_scene.camera.Position();
-
-	// ── 프레임 상수: 조명 (선택한 1개만 켬) ──
-	for (int i = 0; i < MAX_LIGHTS; ++i)
-		m_frameConstants.lights[i] = (i == m_scene.lightType) ? m_scene.light : hlsl::Light{};   // 꺼진 조명은 0
-
-	// ── 머티리얼 상수 ──
-	m_material.diffuse  = Vector3(m_materialDiffuse);
-	m_material.specular = Vector3(m_materialSpecular);
-
-	BuildRenderScene();
-}
-
-void SandboxApp::BuildRenderScene()
-{
-	m_renderScene.frame    = m_frameConstants;
-	m_renderScene.material = m_material;
-
-	m_renderScene.draws.clear();     // capacity는 유지 → 매 프레임 재할당 없음
-	for (const Entity& e : m_scene.entities)
-	{
-		if (!e.visible || !e.mesh.IsValid()) continue;
-		const Mesh& mesh = m_assets.GetMesh(e.mesh);
-
-		DrawItem d;
-		d.vertexBuffer = &mesh.vb;
-		d.indexBuffer  = &mesh.ib;
-		d.albedo = &m_assets.GetTexture(mesh.albedo);
-		d.object       = hlsl::MakeObjectConstants(e.transform.World());   // ← 물체마다 다른 행렬
-		m_renderScene.draws.push_back(d);
-	}
-
-	m_renderScene.envMap        = &m_assets.GetTexture(m_envMap);
-	m_renderScene.irradianceMap = &m_assets.GetTexture(m_irradianceMap);
-	m_renderScene.specularMap   = &m_assets.GetTexture(m_specularMap);
-
-	m_renderScene.post.exposure       = m_exposure;
-	m_renderScene.post.bloomThreshold = m_bloomThreshold;
-	m_renderScene.post.bloomStrength  = m_bloomStrength;
-	m_renderScene.post.bloomBlurCount = m_bloomBlurCount;
-
-	m_renderScene.viewport = m_viewport;
-	m_renderScene.scissor  = m_scissorRect;
-
-	m_renderScene.showWireFrame = m_wireframe;
-	m_renderScene.tint = m_tint;
+	m_view.viewport = m_viewport;
+	m_view.scissor = m_scissorRect;
+	ExtractRenderScene(m_scene, m_assets, m_view, m_renderScene);
 }
 
 void SandboxApp::OnRender()
@@ -190,10 +164,13 @@ void SandboxApp::UpdateSceneViewport()
 
 void SandboxApp::UpdateGUI()
 {
-	bool wireframe = m_wireframe;
-	if (ImGui::Checkbox("Wireframe", &wireframe))
-		m_wireframe = wireframe;
-	ImGui::SliderFloat3("Tint", &m_tint.x, 0.0f, 1.0f);
+	ImGui::Checkbox("WireFrame", &m_view.wireframe);
+	ImGui::ColorEdit3("Wireframe Color", &m_view.wireColor.x);
+	ImGui::Checkbox("Perspective", &m_view.perspective);
+	ImGui::SliderFloat("Exposure", &m_scene.post.exposure, 0.1f, 5.0f);
+	ImGui::SliderFloat("Bloom Threshold", &m_scene.post.bloomThreshold, 0.0f, 3.0f);
+	ImGui::SliderFloat("Bloom Strength", &m_scene.post.bloomStrength, 0.0f, 3.0f);
+	ImGui::SliderInt("Bloom Blur Count", &m_scene.post.bloomBlurCount, 0, 8);
 
 	ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "SandboxApp (Renderer)");   // 어느 버전인지 표시
 	ImGui::Text("CPU wait for GPU: %.2f ms", m_renderer.LastGpuWaitMs());
@@ -204,22 +181,6 @@ void SandboxApp::UpdateGUI()
 		m_renderer.SetVSync(vsync);
 	if (!m_renderer.IsTearingSupported())
 		ImGui::TextDisabled("(tearing not supported)");
-
-	ImGui::SliderFloat("Exposure", &m_exposure, 0.1f, 5.0f);
-	ImGui::SliderFloat("Bloom Threshold", &m_bloomThreshold, 0.0f, 3.0f);
-	ImGui::SliderFloat("Bloom Strength", &m_bloomStrength, 0.0f, 3.0f);
-	ImGui::SliderInt("Bloom Blur Count", &m_bloomBlurCount, 0, 8);
-
-	ImGui::SliderFloat("Rim Strength", &m_material.rimStrength, 0.0f, 10.0f);
-	bool useSmoothstep = m_material.useSmoothstep != 0;
-	if (ImGui::Checkbox("Use Smoothstep", &useSmoothstep))
-		m_material.useSmoothstep = useSmoothstep ? 1u : 0u;
-	ImGui::SliderFloat3("Rim Color", &m_material.rimColor.x, 0.0f, 1.0f);
-	ImGui::SliderFloat("Rim Power", &m_material.rimPower, 0.01f, 10.0f);
-
-	bool useTexture = m_material.useTexture != 0;
-	if (ImGui::Checkbox("Use Texture", &useTexture))
-		m_material.useTexture = useTexture ? 1u : 0u;
 	
 	ImGui::SliderInt("Entity", &m_selected, 0, int(m_scene.entities.size()) - 1);
 	if (!m_scene.entities.empty())
@@ -230,19 +191,29 @@ void SandboxApp::UpdateGUI()
 		ImGui::DragFloat3("Position", &e.transform.position.x, 0.01f, -10.0f, 10.0f);
 		ImGui::DragFloat3("Rotation", &e.transform.rotation.x, 0.01f, -3.14f, 3.14f);
 		ImGui::DragFloat3("Scale", &e.transform.scale.x, 0.01f, 0.01f, 10.0f);
+	
+		Material& mat = m_assets.EditMaterial(e.material);
+		ImGui::Text("Material: %s", mat.name.c_str());
+		ImGui::ColorEdit3("Diffuse", &mat.params.diffuse.x);
+		ImGui::ColorEdit3("Specular", &mat.params.specular.x);
+		ImGui::SliderFloat("Shininess", &mat.params.shininess, 1.0f, 256.0f);
+		bool useTex = mat.params.useTexture != 0;
+		if (ImGui::Checkbox("Use Texutre", &useTex)) mat.params.useTexture = useTex ? 1u : 0u;
+	
+		ImGui::SliderFloat("Rim Strength", &mat.params.rimStrength, 0.0f, 10.0f);
+		bool useSmoothstep = mat.params.useSmoothstep != 0;
+		if (ImGui::Checkbox("Use Smoothstep", &useSmoothstep))
+			mat.params.useSmoothstep = useSmoothstep ? 1u : 0u;
+		ImGui::SliderFloat3("Rim Color", &mat.params.rimColor.x, 0.0f, 1.0f);
+		ImGui::SliderFloat("Rim Power", &mat.params.rimPower, 0.01f, 10.0f);
+		ImGui::SliderFloat3("Material FresnelR0", &mat.params.fresnelR0.x, 0.0f, 1.0f);
 	}
-
-	ImGui::SliderFloat3("Material FresnelR0", &m_material.fresnelR0.x, 0.0f, 1.0f);
-	ImGui::SliderFloat("Material Shininess", &m_material.shininess, 1.0f, 256.0f);
 
 	if (ImGui::RadioButton("Directional Light", m_scene.lightType == 0)) m_scene.lightType = 0;
 	ImGui::SameLine();
 	if (ImGui::RadioButton("Point Light", m_scene.lightType == 1)) m_scene.lightType = 1;
 	ImGui::SameLine();
 	if (ImGui::RadioButton("Spot Light", m_scene.lightType == 2)) m_scene.lightType = 2;
-
-	ImGui::SliderFloat("Material Diffuse", &m_materialDiffuse, 0.0f, 1.0f);
-	ImGui::SliderFloat("Material Specular", &m_materialSpecular, 0.0f, 1.0f);
 
 	ImGui::SliderFloat3("Light Strength", &m_scene.light.strength.x, 0.0f, 5.0f);
 	ImGui::SliderFloat3("Light Position", &m_scene.light.position.x, -5.0f, 5.0f);

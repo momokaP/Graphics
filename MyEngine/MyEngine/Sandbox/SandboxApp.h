@@ -17,6 +17,7 @@
 #include "Scene/Camera.h"
 #include "Scene/Scene.h"
 #include "Assets/AssetManager.h"
+#include "Scene/SceneExtract.h"
 
 class SandboxApp : public DXSample
 {
@@ -38,35 +39,16 @@ private:
 	void LoadAssets();
 	void InitGUI();
 	void UpdateSceneViewport();
-	void BuildRenderScene();          // 앱 데이터 → RenderScene (추출 단계)
 
 	// ── 렌더러 ── (에셋보다 먼저 선언 → 에셋보다 나중에 소멸)
 	Renderer    m_renderer;
 	AssetManager m_assets; // ⚠ Renderer 다음에 선언 → 먼저 소멸. Renderer::Shutdown이 GPU를 이미 비운 뒤라 안전
 	RenderScene m_renderScene;
 
-	TextureHandle m_envMap, m_irradianceMap, m_specularMap;
-
 	// ── 씬 데이터 (3단계 Scene으로 이동 예정) ──
 	Scene m_scene;
-	int m_selected = 0;
-	
-	hlsl::FrameConstants    m_frameConstants{};
-	hlsl::MaterialConstants m_material = hlsl::DefaultMaterial();
-
-	float m_materialDiffuse  = 0.7f;
-	float m_materialSpecular = 0.2f;
-
-	bool  m_usePerspectiveProjection = true;
-	
-	bool  m_wireframe = false;
-	Vector3 m_tint = Vector3(1.0f, 1.0f, 1.0f);
-
-	// ── 후처리 설정 ──
-	float m_exposure       = 1.0f;
-	float m_bloomThreshold = 1.0f;
-	float m_bloomStrength  = 0.1f;
-	int   m_bloomBlurCount = 2;
+	int m_selected = 0;	
+	SceneView m_view;
 
 	// ── 화면 영역 (GUI 패널 제외) ──
 	int            m_guiWidth = 0;
