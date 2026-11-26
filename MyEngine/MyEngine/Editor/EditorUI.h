@@ -31,7 +31,20 @@ private:
 	void DrawSceneSettings(EditorContext& ctx);
 	void DrawRenderSettings(EditorContext& ctx);
 
+	void DrawGizmoToolbar();
+	void DrawGizmo(EditorContext& ctx);
+	void HandlePicking(EditorContext& ctx);
+	void HandleShortcuts();
+
 	int m_selected = -1; // -1 = 선택 없음
 	float m_frameTimes[120] = {}; // 프레임 시간 기록 (원형 버퍼)
 	int m_frameIndex = 0;
+
+	// ImGuizmo 타입을 헤더에 노출하지 않으려고 int로 저장 (cpp에서 변환)
+	int m_gizmoOp = 0; // 0 이동, 1 회전, 2 스케일
+	bool m_gizmoLocal = false;  // false = 월드 축, true = 로컬 축
+	bool m_useSnap = false;
+	float m_snapTranslate = 0.25f;
+	float m_snapRotateDeg = 15.0f;
+	float m_snapScale = 0.1f;
 };

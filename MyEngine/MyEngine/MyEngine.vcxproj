@@ -179,6 +179,7 @@
     <ClCompile Include="Engine\RHI\SwapChain.cpp" />
     <ClCompile Include="Engine\RHI\Texture.cpp" />
     <ClCompile Include="Engine\Scene\Camera.cpp" />
+    <ClCompile Include="Engine\Scene\Picking.cpp" />
     <ClCompile Include="Engine\Scene\SceneExtract.cpp" />
     <ClCompile Include="GeometryGenerator.cpp" />
     <ClCompile Include="main.cpp" />
@@ -209,6 +210,7 @@
     <ClInclude Include="Engine\Renderer\RenderScene.h" />
     <ClInclude Include="Engine\Renderer\Renderer.h" />
     <ClInclude Include="Engine\Scene\Camera.h" />
+    <ClInclude Include="Engine\Scene\Picking.h" />
     <ClInclude Include="Engine\Scene\Scene.h" />
     <ClInclude Include="Engine\Scene\SceneExtract.h" />
     <ClInclude Include="Engine\Scene\Transform.h" />

@@ -10,7 +10,12 @@
 #include "Assets/AssetManager.h"
 #include "Renderer/Renderer.h"
 
+#include <ImGuizmo.h>
+#include "Scene/Picking.h"
+
 using DirectX::SimpleMath::Vector3;
+using DirectX::SimpleMath::Matrix;
+using DirectX::SimpleMath::Quaternion;
 
 namespace
 {
@@ -38,10 +43,19 @@ void EditorUI::Draw(EditorContext& ctx)
 	DrawStats(ctx);
 
 	if (ImGui::CollapsingHeader("Outliner", ImGuiTreeNodeFlags_DefaultOpen))  DrawOutliner(ctx);
-	if (ImGui::CollapsingHeader("Inspector", ImGuiTreeNodeFlags_DefaultOpen)) DrawInspector(ctx);
+	if (ImGui::CollapsingHeader("Inspector", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		DrawGizmoToolbar();
+		DrawInspector(ctx);
+	}
 	if (ImGui::CollapsingHeader("Camera"))                                    DrawCamera(ctx);
 	if (ImGui::CollapsingHeader("Scene Settings"))                            DrawSceneSettings(ctx);
 	if (ImGui::CollapsingHeader("Render"))                                    DrawRenderSettings(ctx);
+
+	// ── 씬 뷰 상호작용 (패널 밖) ──
+	HandleShortcuts();
+	DrawGizmo(ctx); // 먼저: 이번 프레임의 기즈모 hover 상태를 만듦
+	HandlePicking(ctx); // 나중: 기즈모 위 클릭이면 피킹하지 않음
 }
 
 void EditorUI::DrawStats(EditorContext& ctx)
@@ -58,6 +72,9 @@ void EditorUI::DrawStats(EditorContext& ctx)
 	ImGui::Text("Draws: %zu  (entities %zu)", ctx.lastDrawCount, ctx.scene.entities.size());
 	ImGui::Text("Meshes %zu  Textures %zu  Materials %zu",
 		ctx.assets.MeshCount(), ctx.assets.TextureCount(), ctx.assets.MaterialCount());
+
+	ImGui::Text("WantCaptureMouse %d  GizmoOver %d  GizmoUsing %d",
+		io.WantCaptureMouse, ImGuizmo::IsOver(), ImGuizmo::IsUsing());
 }
 
 void EditorUI::DrawOutliner(EditorContext& ctx)
@@ -268,4 +285,92 @@ void EditorUI::DrawRenderSettings(EditorContext& ctx)
 	if (ImGui::Checkbox("VSync", &vsync)) ctx.renderer.SetVSync(vsync);
 	if (!ctx.renderer.IsTearingSupported())
 		ImGui::TextDisabled("(tearing not supported)");
+}
+
+void EditorUI::DrawGizmoToolbar()
+{
+	ImGui::RadioButton("Move (W)", &m_gizmoOp, 0); ImGui::SameLine();
+	ImGui::RadioButton("Rotate (E)", &m_gizmoOp, 1); ImGui::SameLine();
+	ImGui::RadioButton("Scale (R)", &m_gizmoOp, 2);
+
+	ImGui::Checkbox("Local", &m_gizmoLocal); ImGui::SameLine();
+	ImGui::Checkbox("Snap", &m_useSnap);
+	if (m_useSnap)
+	{
+		ImGui::PushItemWidth(60.f);
+		if (m_gizmoOp == 0) ImGui::DragFloat("##snapT", &m_snapTranslate, 0.01f, 0.01f, 10.0f, "%.2f m");
+		if (m_gizmoOp == 1) ImGui::DragFloat("##snapR", &m_snapRotateDeg, 1.0f, 1.0f, 90.0f, "%.0f deg");
+		if (m_gizmoOp == 2) ImGui::DragFloat("##snapS", &m_snapScale, 0.01f, 0.01f, 1.0f, "%.2f");
+		ImGui::PopItemWidth();
+	}
+}
+
+void EditorUI::DrawGizmo(EditorContext& ctx)
+{
+	const D3D12_VIEWPORT& vp = ctx.view.viewport;
+	if (m_selected < 0 || vp.Width <= 0.0f || vp.Height <= 0.0f)
+		return;
+
+	Entity& e = ctx.scene.entities[m_selected];
+	const Camera& cam = ctx.scene.camera;
+
+	Matrix view = cam.View();
+	Matrix proj = cam.Proj(ctx.view.perspective);
+	Matrix world = e.transform.World();
+
+	ImGuizmo::SetOrthographic(!ctx.view.perspective);
+	ImGuizmo::SetRect(vp.TopLeftX, vp.TopLeftY, vp.Width, vp.Height); // 씬 뷰포트 영역에만
+
+	static const ImGuizmo::OPERATION kOps[] = { ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE };
+	const ImGuizmo::OPERATION op = kOps[m_gizmoOp];
+	// 스케일은 로컬 축에서만 의미가 있음 (월드 축 스케일은 기울어짐을 만듦)
+	const ImGuizmo::MODE mode = (m_gizmoLocal || op == ImGuizmo::SCALE) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+
+	float snap[3] = {};
+	if (op == ImGuizmo::TRANSLATE) snap[0] = snap[1] = snap[2] = m_snapTranslate;
+	if (op == ImGuizmo::ROTATE) snap[0] = m_snapRotateDeg;
+	if (op == ImGuizmo::SCALE) snap[0] = snap[1] = snap[2] = m_snapScale;
+
+	// SimpleMath Matrix(행 우선, 행벡터)의 메모리 배치 = ImGuizmo가 기대하는 배치 → 그대로 넘김
+	if (!ImGuizmo::Manipulate(&view._11, &proj._11, op, mode, &world._11,
+		nullptr, m_useSnap ? snap : nullptr))
+		return;
+
+	// 바뀐 행렬 → Transform. 조작한 성분만 갱신해서 오일러 변환 오차를 줄임
+	Vector3 s, t;
+	Quaternion q;
+	if (!world.Decompose(s, q, t))
+		return;
+
+	switch (op)
+	{
+	case ImGuizmo::TRANSLATE: e.transform.position = t;
+	case ImGuizmo::ROTATE: e.transform.rotation = q.ToEuler();
+	case ImGuizmo::SCALE: e.transform.scale = s;
+	default: break;
+	}
+}
+
+void EditorUI::HandlePicking(EditorContext& ctx)
+{
+	const ImGuiIO& io = ImGui::GetIO();
+	if (!ImGui::IsMouseClicked(ImGuiMouseButton_Left)) return;
+	if (io.WantCaptureMouse) return; // ImGui 창 위의 클릭
+	if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) return; // 기즈모 핸들 위의 클릭
+
+	const D3D12_VIEWPORT& vp = ctx.view.viewport;
+	if (vp.Width <= 0.0f || vp.Height <= 0.0f) return;
+
+	const Ray ray = ScreenToWorldRay(ctx.scene.camera, ctx.view.perspective, vp, io.MousePos.x, io.MousePos.y);
+	m_selected = PickEntity(ctx.scene, ctx.assets, ray); // 빈 곳이면 -1 → 선택 해제
+}
+
+void EditorUI::HandleShortcuts()
+{
+	const ImGuiIO& io = ImGui::GetIO();
+	if(io.WantTextInput||ImGui::IsMouseDown(ImGuiMouseButton_Right)) // 이름 입력 중, 비행 중이면 무시
+		return;
+	if (ImGui::IsKeyPressed(ImGuiKey_W)) m_gizmoOp = 0;
+	if (ImGui::IsKeyPressed(ImGuiKey_E)) m_gizmoOp = 1;
+	if (ImGui::IsKeyPressed(ImGuiKey_R)) m_gizmoOp = 2;
 }

@@ -13,10 +13,9 @@ struct Transform
 
 	Matrix World() const
 	{
+		// 회전 순서: Z(roll) → X(pitch) → Y(yaw). Quaternion::ToEuler()와 짝
 		return Matrix::CreateScale(scale) *
-			Matrix::CreateRotationY(rotation.y) *
-			Matrix::CreateRotationX(rotation.x) *
-			Matrix::CreateRotationZ(rotation.z) *
+			Matrix::CreateFromYawPitchRoll(rotation.y, rotation.x, rotation.z) *
 			Matrix::CreateTranslation(position);
 	}
 };

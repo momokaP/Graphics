@@ -23,6 +23,10 @@ MeshHandle AssetManager::CreateMesh(DirectX::ResourceUploadBatch& up, const Mesh
 	m.vb.CreateVertexBuffer(m_device, up, md.vertices, (m.name + L" VB").c_str());
 	m.ib.CreateIndexBuffer(m_device, up, md.indices, (m.name + L" IB").c_str());
 
+	if (!md.vertices.empty())
+		DirectX::BoundingBox::CreateFromPoints(m.localBounds,
+			md.vertices.size(), &md.vertices[0].position, sizeof(Vertex));
+
 	if (!md.albedoTexturePath.empty())
 		m.albedo = LoadTexture(up, md.albedoTexturePath, true);
 

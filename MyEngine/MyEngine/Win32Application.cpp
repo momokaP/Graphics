@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Win32Application.h"
 #include "MyEngine.h"
+#include <ImGuizmo.h>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 	HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -55,6 +56,7 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdshow)
 			ImGui_ImplDX12_NewFrame();
 			ImGui_ImplWin32_NewFrame();
 			ImGui::NewFrame();
+			ImGuizmo::BeginFrame();
 
 			const ImGuiIO& io = ImGui::GetIO();
 			ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);

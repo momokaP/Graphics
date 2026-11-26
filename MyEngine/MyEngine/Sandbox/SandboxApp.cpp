@@ -113,18 +113,16 @@ void SandboxApp::OnUpdate(float dt)
 	// ── 프레임 상수: 카메라 ──
 	CameraInput in;
 	const ImGuiIO& io = ImGui::GetIO();
-	if (!io.WantCaptureKeyboard)
-	{
-		in.forward = float(ImGui::IsKeyDown(ImGuiKey_W)) - float(ImGui::IsKeyDown(ImGuiKey_S));
-		in.right = float(ImGui::IsKeyDown(ImGuiKey_D)) - float(ImGui::IsKeyDown(ImGuiKey_A));
-		in.up = float(ImGui::IsKeyDown(ImGuiKey_E)) - float(ImGui::IsKeyDown(ImGuiKey_Q));
-		in.fast = io.KeyShift;
-	}
-	if (!io.WantCaptureMouse && ImGui::IsMouseDown(ImGuiMouseButton_Right))
+	const bool flying = !io.WantCaptureMouse && ImGui::IsMouseDown(ImGuiMouseButton_Right);
+	if (flying)
 	{
 		in.look = true;
 		in.mouseDx = io.MouseDelta.x;
 		in.mouseDy = io.MouseDelta.y;
+		in.forward = float(ImGui::IsKeyDown(ImGuiKey_W)) - float(ImGui::IsKeyDown(ImGuiKey_S));
+		in.right = float(ImGui::IsKeyDown(ImGuiKey_D)) - float(ImGui::IsKeyDown(ImGuiKey_A));
+		in.up = float(ImGui::IsKeyDown(ImGuiKey_E)) - float(ImGui::IsKeyDown(ImGuiKey_Q));
+		in.fast = io.KeyShift;
 	}
 	m_scene.camera.SetAspect(m_sceneAspect);
 	m_scene.camera.Update(dt, in);

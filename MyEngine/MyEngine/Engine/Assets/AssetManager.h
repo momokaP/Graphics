@@ -8,6 +8,7 @@
 #include "RHI/GpuBuffer.h"
 #include "RHI/Texture.h"
 #include "Shaders/ShaderInterop.h"
+#include <DirectXCollision.h>
 
 struct MeshData;
 class DescriptorHeap;
@@ -18,6 +19,7 @@ struct Mesh
 	std::wstring name;
 	GpuBuffer vb, ib;
 	TextureHandle albedo; // 없으면 invalid → 기본 텍스처
+	DirectX::BoundingBox localBounds; // 메시 로컬 공간의 AABB (피킹·컬링용)
 };
 
 struct Material
