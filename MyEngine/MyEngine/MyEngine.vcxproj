@@ -161,6 +161,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DXSample.cpp" />
+    <ClCompile Include="Editor\EditorUI.cpp" />
     <ClCompile Include="Engine\Assets\AssetManager.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\BloomPass.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\ForwardPass.cpp" />
@@ -192,6 +193,7 @@
   <ItemGroup>
     <ClInclude Include="DXSample.h" />
     <ClInclude Include="DXSampleHelper.h" />
+    <ClInclude Include="Editor\EditorUI.h" />
     <ClInclude Include="Engine\Assets\AssetHandle.h" />
     <ClInclude Include="Engine\Assets\AssetManager.h" />
     <ClInclude Include="Engine\Renderer\GpuMarker.h" />

@@ -18,6 +18,7 @@
 #include "Scene/Scene.h"
 #include "Assets/AssetManager.h"
 #include "Scene/SceneExtract.h"
+#include "Editor/EditorUI.h"
 
 class SandboxApp : public DXSample
 {
@@ -47,8 +48,8 @@ private:
 
 	// ── 씬 데이터 (3단계 Scene으로 이동 예정) ──
 	Scene m_scene;
-	int m_selected = 0;	
 	SceneView m_view;
+	EditorUI m_editor;
 
 	// ── 화면 영역 (GUI 패널 제외) ──
 	int            m_guiWidth = 0;

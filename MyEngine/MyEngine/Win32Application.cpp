@@ -56,11 +56,17 @@ int Win32Application::Run(DXSample* pSample, HINSTANCE hInstance, int nCmdshow)
 			ImGui_ImplWin32_NewFrame();
 			ImGui::NewFrame();
 
+			const ImGuiIO& io = ImGui::GetIO();
+			ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+			// 높이는 화면 높이로 고정, 폭만 드래그로 조절 (200px ~ 화면 절반)
+			ImGui::SetNextWindowSizeConstraints(
+				ImVec2(200.0f, io.DisplaySize.y),
+				ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y));
+
 			ImGui::Begin("Scene Control");
 			ImGui::Text("Average %.3f ms/frame (%.1f FPS)",
 				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 			pSample->UpdateGUI();
-			ImGui::SetWindowPos(ImVec2(0.0f, 0.0f));
 
 			ImGui::End();
 			ImGui::Render();    // 드로우 데이터 확정

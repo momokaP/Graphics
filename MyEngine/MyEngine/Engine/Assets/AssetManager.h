@@ -49,6 +49,7 @@ public:
 
 	size_t MeshCount() const { return m_meshes.size(); }
 	size_t TextureCount() const { return m_textures.size(); }
+	size_t MaterialCount() const { return m_materials.size(); }
 
 	MaterialHandle CreateMaterial(Material m);
 	const Material& GetMaterial(MaterialHandle h) const; // invalid면 기본 머티리얼

@@ -1,5 +1,6 @@
 #pragma once
 #include <directxtk12/SimpleMath.h>
+#include <algorithm>
 
 // 한 프레임의 카메라 입력 (앱이 키보드/마우스에서 채워 넘김 → Camera는 입력 장치를 모름)
 struct CameraInput
@@ -26,6 +27,18 @@ public:
 	Vector3 Forward() const;
 	Matrix View() const;
 	Matrix Proj(bool usePerspectiveProjection) const;
+
+	// ── 에디터용 접근자 (Camera는 ImGui를 모른다) ──
+	float FovY() const { return m_fovY; } // 도 단위
+	void SetFovY(float deg) { m_fovY = deg; }
+	float Yaw() const { return m_yaw; } // 라디안
+	float Pitch() const { return m_pitch; }
+	void SetYawPitch(float yaw, float pitch)
+	{
+		const float limit = DirectX::XMConvertToRadians(89.0f);
+		m_yaw = yaw;
+		m_pitch = std::clamp(pitch, -limit, limit);
+	}
 
 	float moveSpeed = 2.0f;      // m/s
 	float lookSpeed = 0.003f;    // rad/px

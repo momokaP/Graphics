@@ -164,63 +164,12 @@ void SandboxApp::UpdateSceneViewport()
 
 void SandboxApp::UpdateGUI()
 {
-	ImGui::Checkbox("WireFrame", &m_view.wireframe);
-	ImGui::ColorEdit3("Wireframe Color", &m_view.wireColor.x);
-	ImGui::Checkbox("Perspective", &m_view.perspective);
-	ImGui::SliderFloat("Exposure", &m_scene.post.exposure, 0.1f, 5.0f);
-	ImGui::SliderFloat("Bloom Threshold", &m_scene.post.bloomThreshold, 0.0f, 3.0f);
-	ImGui::SliderFloat("Bloom Strength", &m_scene.post.bloomStrength, 0.0f, 3.0f);
-	ImGui::SliderInt("Bloom Blur Count", &m_scene.post.bloomBlurCount, 0, 8);
+	ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "SandboxApp (Renderer)");
 
-	ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "SandboxApp (Renderer)");   // 어느 버전인지 표시
-	ImGui::Text("CPU wait for GPU: %.2f ms", m_renderer.LastGpuWaitMs());
-	ImGui::Text("Upload: %.1f KB", m_renderer.UploadBytesUsed() / 1024.0);
+	EditorContext ctx{ m_scene, m_assets, m_view, m_renderer, m_renderScene.draws.size() };
+	m_editor.Draw(ctx);
 
-	bool vsync = m_renderer.VSync();
-	if (ImGui::Checkbox("VSync", &vsync))
-		m_renderer.SetVSync(vsync);
-	if (!m_renderer.IsTearingSupported())
-		ImGui::TextDisabled("(tearing not supported)");
-	
-	ImGui::SliderInt("Entity", &m_selected, 0, int(m_scene.entities.size()) - 1);
-	if (!m_scene.entities.empty())
-	{
-		Entity& e = m_scene.entities[m_selected];
-		ImGui::Text("%s", e.name.c_str());
-		ImGui::Checkbox("Visivle", &e.visible);
-		ImGui::DragFloat3("Position", &e.transform.position.x, 0.01f, -10.0f, 10.0f);
-		ImGui::DragFloat3("Rotation", &e.transform.rotation.x, 0.01f, -3.14f, 3.14f);
-		ImGui::DragFloat3("Scale", &e.transform.scale.x, 0.01f, 0.01f, 10.0f);
-	
-		Material& mat = m_assets.EditMaterial(e.material);
-		ImGui::Text("Material: %s", mat.name.c_str());
-		ImGui::ColorEdit3("Diffuse", &mat.params.diffuse.x);
-		ImGui::ColorEdit3("Specular", &mat.params.specular.x);
-		ImGui::SliderFloat("Shininess", &mat.params.shininess, 1.0f, 256.0f);
-		bool useTex = mat.params.useTexture != 0;
-		if (ImGui::Checkbox("Use Texutre", &useTex)) mat.params.useTexture = useTex ? 1u : 0u;
-	
-		ImGui::SliderFloat("Rim Strength", &mat.params.rimStrength, 0.0f, 10.0f);
-		bool useSmoothstep = mat.params.useSmoothstep != 0;
-		if (ImGui::Checkbox("Use Smoothstep", &useSmoothstep))
-			mat.params.useSmoothstep = useSmoothstep ? 1u : 0u;
-		ImGui::SliderFloat3("Rim Color", &mat.params.rimColor.x, 0.0f, 1.0f);
-		ImGui::SliderFloat("Rim Power", &mat.params.rimPower, 0.01f, 10.0f);
-		ImGui::SliderFloat3("Material FresnelR0", &mat.params.fresnelR0.x, 0.0f, 1.0f);
-	}
-
-	if (ImGui::RadioButton("Directional Light", m_scene.lightType == 0)) m_scene.lightType = 0;
-	ImGui::SameLine();
-	if (ImGui::RadioButton("Point Light", m_scene.lightType == 1)) m_scene.lightType = 1;
-	ImGui::SameLine();
-	if (ImGui::RadioButton("Spot Light", m_scene.lightType == 2)) m_scene.lightType = 2;
-
-	ImGui::SliderFloat3("Light Strength", &m_scene.light.strength.x, 0.0f, 5.0f);
-	ImGui::SliderFloat3("Light Position", &m_scene.light.position.x, -5.0f, 5.0f);
-	ImGui::SliderFloat("Light fallOffStart", &m_scene.light.fallOffStart, 0.0f, 5.0f);
-	ImGui::SliderFloat("Light fallOffEnd", &m_scene.light.fallOffEnd, 0.0f, 10.0f);
-	ImGui::SliderFloat("Light spotPower", &m_scene.light.spotPower, 1.0f, 512.0f);
-
+	// 패널 폭이 바뀌면 씬 뷰포트 재계산 (앱의 일: 창 레이아웃)
 	int newWidth = int(ImGui::GetWindowWidth());
 	if (newWidth != m_guiWidth)
 	{
