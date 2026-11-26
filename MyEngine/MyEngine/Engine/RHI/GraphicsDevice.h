@@ -20,6 +20,13 @@ public:
     void   WaitForFence(UINT64 value);       // GPU가 value까지 끝낼 때까지 CPU 대기
     void   Flush() { WaitForFence(Signal()); }   // GPU를 완전히 비움 (리사이즈, 종료 시)
 
+    struct Caps
+    {
+        D3D_SHADER_MODEL highestShaderModel = D3D_SHADER_MODEL_5_1;
+        bool enhancedBarriers = false;
+    };
+    const Caps& GetCaps() const { return m_caps; }
+
 private:
     Microsoft::WRL::ComPtr<IDXGIFactory4>      m_factory;
     Microsoft::WRL::ComPtr<ID3D12Device>       m_device;
@@ -28,4 +35,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
     UINT64 m_nextFenceValue = 1;
     HANDLE m_fenceEvent = nullptr;
+
+    void QueryCaps();
+    Caps m_caps;
 };

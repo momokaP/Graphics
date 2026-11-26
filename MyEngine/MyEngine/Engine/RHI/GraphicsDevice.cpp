@@ -67,6 +67,8 @@ void GraphicsDevice::Init(bool useWarp)
         ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)));
     }
 
+    QueryCaps();
+
 #if defined(_DEBUG)
     // 디버그 레이어 에러가 나면 그 줄에서 바로 멈춤 → 원인 찾기가 훨씬 쉬워짐
     ComPtr<ID3D12InfoQueue> infoQueue;
@@ -101,6 +103,28 @@ void GraphicsDevice::WaitForFence(UINT64 value)
     if (m_fence->GetCompletedValue() >= value) return;
     ThrowIfFailed(m_fence->SetEventOnCompletion(value, m_fenceEvent));
     WaitForSingleObject(m_fenceEvent, INFINITE);
+}
+
+void GraphicsDevice::QueryCaps()
+{
+    // 셰이더 모델: "내가 아는 최고 버전"부터 물어보고, 런타임이 모르는 값이면(E_INVALIDARG) 한 단계씩 낮춤
+    D3D12_FEATURE_DATA_SHADER_MODEL sm = { D3D_HIGHEST_SHADER_MODEL };
+    while (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &sm, sizeof(sm)))
+        && sm.HighestShaderModel > D3D_SHADER_MODEL_5_1)
+    {
+        sm.HighestShaderModel = D3D_SHADER_MODEL(sm.HighestShaderModel - 1);
+    }
+    m_caps.highestShaderModel = sm.HighestShaderModel;
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS12 o12 = {};
+    if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &o12, sizeof(o12))))
+        m_caps.enhancedBarriers = o12.EnhancedBarriersSupported;
+
+    char buf[128];
+    sprintf_s(buf, "[Device] Shader Model %d.%d, Enhanced Barriers %s\n",
+        (m_caps.highestShaderModel >> 4) & 0xF, m_caps.highestShaderModel & 0xF,
+        m_caps.enhancedBarriers ? "yes" : "no");
+    OutputDebugStringA(buf);
 }
 
 void GraphicsDevice::Shutdown()

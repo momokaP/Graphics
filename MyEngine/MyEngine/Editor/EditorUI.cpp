@@ -353,9 +353,9 @@ void EditorUI::DrawGizmo(EditorContext& ctx)
 
 	switch (op)
 	{
-	case ImGuizmo::TRANSLATE: e.transform.position = t;
+	case ImGuizmo::TRANSLATE: e.transform.position = t; break;
 	case ImGuizmo::ROTATE: e.transform.rotation = q.ToEuler(); break;
-	case ImGuizmo::SCALE: e.transform.scale = s;
+	case ImGuizmo::SCALE: e.transform.scale = s; break;
 	default: break;
 	}
 }
