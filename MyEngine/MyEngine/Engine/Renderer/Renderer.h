@@ -16,6 +16,7 @@
 #include "Renderer/Passes/BloomPass.h"
 #include "Renderer/Passes/TonemapPass.h"
 #include "Renderer/Passes/UIPass.h"
+#include "Renderer/Passes/IdPass.h"
 
 struct RenderScene;
 namespace DirectX { class ResourceUploadBatch; }
@@ -59,6 +60,9 @@ public:
     float  LastGpuWaitMs() const { return m_lastGpuWaitMs; }
     UINT64 UploadBytesUsed() const { return m_uploadAlloc.UsedBytes(); }
 
+    // 피킹 결과 (요청 후 약 3프레임 뒤). 0 = 아무것도 없음, 그 외 = 엔티티 인덱스 + 1
+    bool ConsumePickResult(uint32_t& outId);
+
 private:
     void CreateRootSignature();
     void CreateSizeDependentTargets(UINT width, UINT height);
@@ -66,6 +70,9 @@ private:
     void RecordFrame(const RenderScene& scene);   // ← MyEngine::PopulateCommandList
     void MoveToNextFrame();
     void WaitForGpuIdle();
+
+    void ResolvePick(); // 이전에 기록한 복사 결과 읽기
+    void RecordPickCopy(ID3D12GraphicsCommandList* cmd, UINT x, UINT y);
 
     struct FrameContext
     {
@@ -85,7 +92,14 @@ private:
 
     // 여러 패스가 공유하는 렌더 타깃
     Texture m_sceneColor, m_depth;
+    Texture m_idTarget; // R32_UINT, 엔티티 번호
     UINT    m_width = 0, m_height = 0;
+
+    // 피킹 리드백: 프레임 슬롯마다 512바이트 (CPU가 읽을 수 있는 READBACK 힙)
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_pickReadback;
+    bool m_pickPending[kFrameCount] = {}; // 이 슬롯에 복사를 기록했나
+    bool m_hasPickResult = false;
+    uint32_t m_pickResult = 0;
 
     // 패스 (실행 순서대로 선언)
     SkyboxPass  m_skyboxPass;
@@ -94,6 +108,7 @@ private:
     BloomPass   m_bloomPass;
     TonemapPass m_tonemapPass;
     UIPass      m_uiPass;
+    IdPass      m_idPass;
 
     UINT  m_frameIndex = 0;
     bool  m_vsync = true;

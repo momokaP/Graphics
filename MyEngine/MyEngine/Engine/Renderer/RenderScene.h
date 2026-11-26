@@ -14,6 +14,7 @@ struct DrawItem
     const Texture* albedo = nullptr;   // 없으면 기본 텍스처를 넣어서 전달
     hlsl::ObjectConstants object{};
     hlsl::MaterialConstants material{};
+    uint32_t entityId = 0; // 피킹용: Scene 엔티티 인덱스 + 1 (0 = 없음)
 };
 
 struct PostSettings
@@ -41,4 +42,8 @@ struct RenderScene
 
     bool showWireFrame = false;
     hlsl::float3 tint;
+
+    // 피킹 요청 (요청한 프레임에만 IdPass 실행)
+    bool pickRequested = false;
+    uint32_t pickX = 0, pickY = 0; // 창 클라이언트 픽셀
 };

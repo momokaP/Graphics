@@ -11,6 +11,11 @@
 namespace
 {
     const float kSceneClear[4] = { 0.2f, 0.2f, 0.25f, 1.0f };
+
+    // 피킹 리드백 슬롯 위치. GPU 복사(쓰기)와 CPU Map(읽기)이 반드시 같은 값을 써야 함
+    //   텍스처 → 버퍼 복사의 시작 오프셋은 512의 배수여야 함 (PLACEMENT_ALIGNMENT)
+    constexpr UINT64 kPickSlotSize = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
+    constexpr UINT64 PickSlotOffset(UINT frameIndex) { return UINT64(frameIndex) * kPickSlotSize; }
 }
 
 // ════════════════════════════ 생명주기 ════════════════════════════
@@ -50,6 +55,16 @@ void Renderer::Init(const Desc& desc)
 
     m_uploadAlloc.Init(device, kFrameCount, 1 * 1024 * 1024, L"Dynamic Upload");
 
+    // 피킹 리드백 버퍼: CPU가 Map해서 읽을 수 있는 힙. 슬롯 오프셋은 512 정렬 (텍스처 복사 규칙)
+    {
+        auto heap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+        auto desc = CD3DX12_RESOURCE_DESC::Buffer(kFrameCount * kPickSlotSize);
+        ThrowIfFailed(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+            D3D12_RESOURCE_STATE_COPY_DEST, // READBACK 힙은 COPY_DEST로
+            nullptr, IID_PPV_ARGS(&m_pickReadback)));
+        m_pickReadback->SetName(L"Pick Readback");
+    }
+
     CreateRootSignature();
 
     // 패스 초기화 (스카이박스 메시처럼 업로드가 필요한 리소스 포함)
@@ -59,6 +74,7 @@ void Renderer::Init(const Desc& desc)
             m_skyboxPass.Init(ctx);
             m_forwardPass.Init(ctx);
             m_wireframePass.Init(ctx);
+            m_idPass.Init(ctx);
             m_bloomPass.Init(ctx);
             m_tonemapPass.Init(ctx);
         });
@@ -105,6 +121,7 @@ void Renderer::Resize(UINT width, UINT height)
 
 void Renderer::Render(const RenderScene& scene)
 {
+    ResolvePick(); // 이 슬롯에 2프레임 전 기록한 복사가 있으면 읽음
     RecordFrame(scene);
 
     ID3D12CommandList* lists[] = { m_commandList.Get() };
@@ -176,13 +193,27 @@ void Renderer::RecordFrame(const RenderScene& scene)
             cmd->RSSetScissorRects(1, &scene.scissor);
 
             run(m_skyboxPass);
+            run(m_forwardPass);
 
-            if (scene.showWireFrame) {
-                run(m_forwardPass);
-                run(m_wireframePass);
-            }
-            else {
-                run(m_forwardPass);
+            if (scene.showWireFrame) run(m_wireframePass);
+
+            if (scene.pickRequested && scene.pickX < m_width && scene.pickY < m_height)
+            {
+                GpuMarker marker(cmd, L"Pick");
+                const D3D12_RECT pixel = { LONG(scene.pickX), LONG(scene.pickY),
+                                          LONG(scene.pickX) + 1, LONG(scene.pickY) + 1 };
+
+                m_idTarget.Transition(cmd, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                cmd->OMSetRenderTargets(1, &m_idTarget.rtv.cpu, FALSE, &m_depth.dsv.cpu); // 씬 깊이 재사용
+                cmd->ClearRenderTargetView(m_idTarget.rtv.cpu, m_idTarget.ClearColor(), 1, &pixel); // 1픽셀만
+                cmd->ClearDepthStencilView(m_depth.dsv.cpu, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 1, &pixel);
+                cmd->RSSetScissorRects(1, &pixel); // 클릭한 1픽셀만 래스터화
+
+                // ⚠ Pick은 씬 깊이의 1픽셀을 덮어씀 → 깊이를 읽는 패스보다 뒤에 둘 것
+                run(m_idPass);
+
+                cmd->RSSetScissorRects(1, &scene.scissor); // 원래대로
+                RecordPickCopy(cmd, scene.pickX, scene.pickY);
             }
 
             m_sceneColor.Transition(cmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -247,6 +278,52 @@ void Renderer::WaitForGpuIdle()
     m_gfx.Flush();
 }
 
+void Renderer::ResolvePick()
+{
+    if (!m_pickPending[m_frameIndex]) return;
+
+    // 이 슬롯을 쓴 프레임의 fence는 MoveToNextFrame에서 이미 기다렸음 → 복사 완료 보장
+    assert(m_gfx.IsFenceComplete(m_frames[m_frameIndex].fenceValue));
+    
+    const SIZE_T offset = SIZE_T(PickSlotOffset(m_frameIndex));
+    const D3D12_RANGE readRange = { offset, offset + sizeof(uint32_t) }; // CPU가 읽을 범위 
+    void* mapped = nullptr;
+    ThrowIfFailed(m_pickReadback->Map(0, &readRange, &mapped)); // 반환 포인터는 버퍼 시작
+    memcpy(&m_pickResult, static_cast<const uint8_t*>(mapped) + offset, sizeof(uint32_t));
+    const D3D12_RANGE noWrite = { 0,0 };
+    m_pickReadback->Unmap(0, &noWrite);
+
+    m_hasPickResult = true;
+    m_pickPending[m_frameIndex] = false;
+}
+
+void Renderer::RecordPickCopy(ID3D12GraphicsCommandList* cmd, UINT x, UINT y)
+{
+    m_idTarget.Transition(cmd, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+    D3D12_TEXTURE_COPY_LOCATION src = {};
+    src.pResource = m_idTarget.Get();
+    src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src.SubresourceIndex = 0;
+
+    // 버퍼 쪽은 "이 버퍼를 이런 모양의 텍스처로 본다"는 footprint로 기술
+    D3D12_TEXTURE_COPY_LOCATION dst = {};
+    dst.pResource = m_pickReadback.Get();
+    dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    dst.PlacedFootprint.Offset = PickSlotOffset(m_frameIndex);
+    dst.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_UINT;
+    dst.PlacedFootprint.Footprint.Width = 1;
+    dst.PlacedFootprint.Footprint.Height = 1;
+    dst.PlacedFootprint.Footprint.Depth = 1;
+    dst.PlacedFootprint.Footprint.RowPitch = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+
+    const D3D12_BOX box = { x,y,0,x + 1,y + 1,1 }; // 원본에서 복사할 영역
+    cmd->CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
+
+    m_idTarget.Transition(cmd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); // 평소 상태로
+    m_pickPending[m_frameIndex] = true;
+}
+
 // ════════════════════════════ 에셋 지원 ════════════════════════════
 
 void Renderer::UploadResources(const std::function<void(DirectX::ResourceUploadBatch&)>& record)
@@ -287,6 +364,18 @@ void Renderer::CreateSizeDependentTargets(UINT width, UINT height)
     m_sceneColor.CreateRenderTarget(ctx.device, m_rtvHeap, m_srvHeap,
         width, height, kHdrFormat, kSceneClear, L"SceneColor");
     m_bloomPass.Resize(ctx, width, height);
+    
+    const float kIdClear[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    m_idTarget.CreateRenderTarget(ctx.device, m_rtvHeap, m_srvHeap,
+        width, height, DXGI_FORMAT_R32_UINT, kIdClear, L"EntityId");
+}
+
+bool Renderer::ConsumePickResult(uint32_t& outId)
+{
+    if (!m_hasPickResult) return false;
+    outId = m_pickResult;
+    m_hasPickResult = false;
+    return true;
 }
 
 void Renderer::CreateRootSignature()

@@ -37,6 +37,14 @@ namespace
 
 void EditorUI::Draw(EditorContext& ctx)
 {
+	// ── GPU 피킹 결과 받기 (요청 후 몇 프레임 뒤에 도착) ──
+	ctx.view.pickRequested = false; // 요청은 한 프레임만
+	uint32_t pickedId = 0;
+	if (ctx.renderer.ConsumePickResult(pickedId))
+	{
+		m_selected = (pickedId == 0 || pickedId > ctx.scene.entities.size()) ? -1 : int(pickedId) - 1;
+	}
+
 	// 엔티티가 바깥에서 줄었을 때를 대비해 선택 인덱스를 범위 안으로
 	m_selected = std::min(m_selected, int(ctx.scene.entities.size()) - 1);
 
@@ -277,6 +285,7 @@ void EditorUI::DrawSceneSettings(EditorContext& ctx)
 
 void EditorUI::DrawRenderSettings(EditorContext& ctx)
 {
+	ImGui::Checkbox("GPU Picking", &m_gpuPicking);
 	ImGui::Checkbox("Wireframe", &ctx.view.wireframe);
 	ImGui::ColorEdit3("Wireframe Color", &ctx.view.wireColor.x);
 	ImGui::Checkbox("Perspective", &ctx.view.perspective);
@@ -345,7 +354,7 @@ void EditorUI::DrawGizmo(EditorContext& ctx)
 	switch (op)
 	{
 	case ImGuizmo::TRANSLATE: e.transform.position = t;
-	case ImGuizmo::ROTATE: e.transform.rotation = q.ToEuler();
+	case ImGuizmo::ROTATE: e.transform.rotation = q.ToEuler(); break;
 	case ImGuizmo::SCALE: e.transform.scale = s;
 	default: break;
 	}
@@ -361,8 +370,18 @@ void EditorUI::HandlePicking(EditorContext& ctx)
 	const D3D12_VIEWPORT& vp = ctx.view.viewport;
 	if (vp.Width <= 0.0f || vp.Height <= 0.0f) return;
 
-	const Ray ray = ScreenToWorldRay(ctx.scene.camera, ctx.view.perspective, vp, io.MousePos.x, io.MousePos.y);
-	m_selected = PickEntity(ctx.scene, ctx.assets, ray); // 빈 곳이면 -1 → 선택 해제
+	if (m_gpuPicking)
+	{
+		// 요청만 보냄. 결과는 몇 프레임 뒤 Draw 앞에서 받음
+		ctx.view.pickRequested = true;
+		ctx.view.pickX = uint32_t(io.MousePos.x);
+		ctx.view.pickY = uint32_t(io.MousePos.y);
+	}
+	else
+	{
+		const Ray ray = ScreenToWorldRay(ctx.scene.camera, ctx.view.perspective, vp, io.MousePos.x, io.MousePos.y);
+		m_selected = PickEntity(ctx.scene, ctx.assets, ray); // 빈 곳이면 -1 → 선택 해제
+	}
 }
 
 void EditorUI::HandleShortcuts()

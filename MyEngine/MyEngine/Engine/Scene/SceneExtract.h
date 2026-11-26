@@ -15,6 +15,10 @@ struct SceneView
 
 	bool wireframe = false;
 	hlsl::float3 wireColor{ 1.0f, 1.0f, 1.0f };
+
+	// 에디터가 이번 프레임에 채움 (매 프레임 초기화)
+	bool pickRequested = false;
+	uint32_t pickX = 0, pickY = 0;
 };
 
 // Scene + Assets → RenderScene (렌더러 입력 스냅샷)

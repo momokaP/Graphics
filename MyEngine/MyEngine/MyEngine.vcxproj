@@ -165,6 +165,7 @@
     <ClCompile Include="Engine\Assets\AssetManager.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\BloomPass.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\ForwardPass.cpp" />
+    <ClCompile Include="Engine\Renderer\Passes\IdPass.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\SkyboxPass.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\TonemapPass.cpp" />
     <ClCompile Include="Engine\Renderer\Passes\UIPass.cpp" />
@@ -200,6 +201,7 @@
     <ClInclude Include="Engine\Renderer\GpuMarker.h" />
     <ClInclude Include="Engine\Renderer\Passes\BloomPass.h" />
     <ClInclude Include="Engine\Renderer\Passes\ForwardPass.h" />
+    <ClInclude Include="Engine\Renderer\Passes\IdPass.h" />
     <ClInclude Include="Engine\Renderer\Passes\SkyboxPass.h" />
     <ClInclude Include="Engine\Renderer\Passes\TonemapPass.h" />
     <ClInclude Include="Engine\Renderer\Passes\UIPass.h" />
@@ -288,6 +290,16 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.1</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Engine\Shaders\IdPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>

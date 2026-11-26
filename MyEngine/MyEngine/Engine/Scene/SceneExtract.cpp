@@ -22,8 +22,9 @@ void ExtractRenderScene(const Scene& scene, const AssetManager& assets, const Sc
 
 	// ── Draw 목록 ──
 	out.draws.clear();
-	for (const Entity& e : scene.entities)
+	for (size_t i = 0; i<scene.entities.size(); ++i)
 	{
+		const Entity& e = scene.entities[i];
 		if (!e.visible || !e.mesh.IsValid()) continue;
 		// (나중에 프러스텀 컬링이 들어갈 자리)
 
@@ -36,6 +37,7 @@ void ExtractRenderScene(const Scene& scene, const AssetManager& assets, const Sc
 		d.object = hlsl::MakeObjectConstants(e.transform.World());
 		d.material = mat.params;
 		d.albedo = &assets.GetTexture(mat.albedo.IsValid() ? mat.albedo : mesh.albedo);
+		d.entityId = uint32_t(i) + 1;
 		out.draws.push_back(d);
 	}
 
@@ -55,5 +57,7 @@ void ExtractRenderScene(const Scene& scene, const AssetManager& assets, const Sc
 	out.scissor = view.scissor;
 	out.showWireFrame = view.wireframe;
 	out.tint = view.wireColor;
-
+	out.pickRequested = view.pickRequested;
+	out.pickX = view.pickX;
+	out.pickY = view.pickY;
 }

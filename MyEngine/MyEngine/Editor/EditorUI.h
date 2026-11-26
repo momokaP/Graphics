@@ -47,4 +47,6 @@ private:
 	float m_snapTranslate = 0.25f;
 	float m_snapRotateDeg = 15.0f;
 	float m_snapScale = 0.1f;
+
+	bool m_gpuPicking = true; // true = ID 버퍼, false = AABB 레이
 };

@@ -114,6 +114,9 @@
     <ClCompile Include="Engine\Scene\Picking.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Renderer\Passes\IdPass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -242,6 +245,9 @@
     <ClInclude Include="Engine\Scene\Picking.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Renderer\Passes\IdPass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -275,6 +281,7 @@
       <Filter>Assets\Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Engine\Shaders\WireFramePixelShader.hlsl" />
+    <FxCompile Include="Engine\Shaders\IdPS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Copyright.txt" />
