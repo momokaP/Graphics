@@ -28,6 +28,8 @@ public:
     PipelineBuilder& DepthBias(INT bias, FLOAT slopeScaled);
     Microsoft::WRL::ComPtr<ID3D12PipelineState> Build(ID3D12Device* device, const wchar_t* name);
 
+    // 실패하면 nullptr (리로드용). 원인은 디버그 레이어 출력 참고
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> TryBuild(ID3D12Device* device, const wchar_t* name);
 private:
     D3D12_GRAPHICS_PIPELINE_STATE_DESC m_desc = {};
 };

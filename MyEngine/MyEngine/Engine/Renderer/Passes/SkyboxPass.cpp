@@ -14,19 +14,33 @@
 
 void SkyboxPass::Init(const RenderInitContext& ctx)
 {
-    auto vs = ctx.shaders->CompileOrThrow({ L"VertexShader.hlsl", ShaderTarget::VS });
-    auto ps = ctx.shaders->CompileOrThrow({ L"CubeMappingPixelShader.hlsl",  ShaderTarget::PS });
-    m_pso = PipelineBuilder(ctx.rootSignature)
-        .VS(vs).PS(ps).InputLayout(kVertexLayout)
-        .RenderTarget(kHdrFormat).DepthFormat(kDepthFormat)
-        .Cull(D3D12_CULL_MODE_NONE).DepthWrite(false)
-        .Build(ctx.device, L"Skybox PSO");
-
     MeshData box = GeometryGenerator::MakeBox();
     m_vb.CreateVertexBuffer(ctx.device, *ctx.upload, box.vertices, L"Skybox VB");
     m_ib.CreateIndexBuffer(ctx.device, *ctx.upload, box.indices, L"Skybox IB");
 
     m_object = hlsl::MakeObjectConstants(DirectX::SimpleMath::Matrix::CreateScale(20.0f));
+}
+
+bool SkyboxPass::CreatePipelines(const RenderInitContext& ctx)
+{
+    ShaderResult vs = ctx.shaders->Compile({ L"VertexShader.hlsl", ShaderTarget::VS });
+    ShaderResult ps = ctx.shaders->Compile({ L"CubeMappingPixelShader.hlsl",  ShaderTarget::PS });
+    if (!vs.ok || !ps.ok)
+        return false;
+
+    auto pso = PipelineBuilder(ctx.rootSignature)
+        .VS(vs.bytecode).PS(ps.bytecode).InputLayout(kVertexLayout)
+        .RenderTarget(kHdrFormat).DepthFormat(kDepthFormat)
+        .Cull(D3D12_CULL_MODE_NONE).DepthWrite(false)
+        .Build(ctx.device, L"Skybox PSO");
+    if (!pso)
+    {
+        ctx.shaders->ReportError("Skybox PSO", "CreateGraphicsPipelineState failed (see D3D12 debuf output)");
+        return false;
+    }
+
+    ReplacePso(ctx, m_pso, std::move(pso));
+    return true;
 }
 
 void SkyboxPass::Execute(RenderContext& ctx)

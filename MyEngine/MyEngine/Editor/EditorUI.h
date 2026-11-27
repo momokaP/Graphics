@@ -34,7 +34,9 @@ private:
 	void DrawGizmoToolbar();
 	void DrawGizmo(EditorContext& ctx);
 	void HandlePicking(EditorContext& ctx);
-	void HandleShortcuts();
+	void HandleShortcuts(EditorContext& ctx);
+
+	void DrawShaderErrors(EditorContext& ctx);
 
 	int m_selected = -1; // -1 = 선택 없음
 	float m_frameTimes[120] = {}; // 프레임 시간 기록 (원형 버퍼)

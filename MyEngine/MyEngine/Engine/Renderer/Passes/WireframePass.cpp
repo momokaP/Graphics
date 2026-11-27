@@ -14,17 +14,33 @@
 
 void WireframePass::Init(const RenderInitContext& ctx)
 {
-    auto vs = ctx.shaders->CompileOrThrow({ L"VertexShader.hlsl", ShaderTarget::VS });
-    auto ps = ctx.shaders->CompileOrThrow({ L"WireFramePixelShader.hlsl",  ShaderTarget::PS });
-    m_pso = PipelineBuilder(ctx.rootSignature)
-        .VS(vs).PS(ps).InputLayout(kVertexLayout)
+    
+}
+
+bool WireframePass::CreatePipelines(const RenderInitContext& ctx)
+{
+    ShaderResult vs = ctx.shaders->Compile({ L"VertexShader.hlsl", ShaderTarget::VS });
+    ShaderResult ps = ctx.shaders->Compile({ L"WireFramePixelShader.hlsl",  ShaderTarget::PS });
+    if (!vs.ok || !ps.ok)
+        return false;
+
+    auto pso = PipelineBuilder(ctx.rootSignature)
+        .VS(vs.bytecode).PS(ps.bytecode).InputLayout(kVertexLayout)
         .RenderTarget(kHdrFormat).DepthFormat(kDepthFormat)
-        .Cull(D3D12_CULL_MODE_NONE)                      
+        .Cull(D3D12_CULL_MODE_NONE)
         .FillMode(D3D12_FILL_MODE_WIREFRAME)
         .DepthTest(true, D3D12_COMPARISON_FUNC_LESS_EQUAL)
-        .DepthWrite(false)                               
-        .DepthBias(-100, 0.0f)                            
+        .DepthWrite(false)
+        .DepthBias(-100, 0.0f)
         .Build(ctx.device, L"Wireframe PSO");
+    if (!pso)
+    {
+        ctx.shaders->ReportError("Wireframe PSO", "CreateGraphicsPipelineState failed (see D3D12 debuf output)");
+        return false;
+    }
+
+    ReplacePso(ctx, m_pso, std::move(pso));
+    return true;
 }
 
 void WireframePass::Execute(RenderContext& ctx)

@@ -13,14 +13,30 @@
 
 void TonemapPass::Init(const RenderInitContext& ctx)
 {
-    auto vs = ctx.shaders->CompileOrThrow({ L"FullscreenVS.hlsl", ShaderTarget::VS });
-    auto ps = ctx.shaders->CompileOrThrow({ L"BloomCombinePS.hlsl",  ShaderTarget::PS });
-    m_pso = PipelineBuilder(ctx.rootSignature)
-        .VS(vs).PS(ps)
+    
+}
+
+bool TonemapPass::CreatePipelines(const RenderInitContext& ctx)
+{
+    ShaderResult vs = ctx.shaders->Compile({ L"FullscreenVS.hlsl", ShaderTarget::VS });
+    ShaderResult ps = ctx.shaders->Compile({ L"BloomCombinePS.hlsl",  ShaderTarget::PS });
+    if (!vs.ok || !ps.ok)
+        return false;
+
+    auto pso = PipelineBuilder(ctx.rootSignature)
+        .VS(vs.bytecode).PS(ps.bytecode)
         .RenderTarget(ctx.backBufferFormat)
         .DepthFormat(kDepthFormat)                 // 같은 바인딩으로 ImGui가 그려지므로 DSV 포맷을 맞춤
         .Cull(D3D12_CULL_MODE_NONE).DepthTest(false)
         .Build(ctx.device, L"Tonemap PSO");
+    if (!pso)
+    {
+        ctx.shaders->ReportError("Tonemap PSO", "CreateGraphicsPipelineState failed (see D3D12 debuf output)");
+        return false;
+    }
+
+    ReplacePso(ctx, m_pso, std::move(pso));
+    return true;
 }
 
 void TonemapPass::Execute(RenderContext& ctx)

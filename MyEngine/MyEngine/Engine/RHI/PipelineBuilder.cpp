@@ -82,3 +82,18 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineBuilder::Build(ID3D12Device*
     if (name) pso->SetName(name);    // PIX와 디버그 메시지에 "Forward PSO"처럼 표시
     return pso;
 }
+
+Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineBuilder::TryBuild(ID3D12Device* device, const wchar_t* name)
+{
+    if (m_desc.DSVFormat == DXGI_FORMAT_UNKNOWN)
+    {
+        m_desc.DepthStencilState.DepthEnable = FALSE;
+        m_desc.DepthStencilState.StencilEnable = FALSE;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+    if (FAILED(device->CreateGraphicsPipelineState(&m_desc, IID_PPV_ARGS(&pso))))
+        return nullptr;
+    pso->SetName(name);
+    return pso;
+}

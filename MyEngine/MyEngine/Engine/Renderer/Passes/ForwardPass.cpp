@@ -13,13 +13,29 @@
 
 void ForwardPass::Init(const RenderInitContext& ctx)
 {
-    auto vs = ctx.shaders->CompileOrThrow({ L"VertexShader.hlsl", ShaderTarget::VS });
-    auto ps = ctx.shaders->CompileOrThrow({ L"PixelShader.hlsl",  ShaderTarget::PS });
-    m_pso = PipelineBuilder(ctx.rootSignature)
-        .VS(vs).PS(ps).InputLayout(kVertexLayout)
+
+}
+
+bool ForwardPass::CreatePipelines(const RenderInitContext& ctx)
+{
+    ShaderResult vs = ctx.shaders->Compile({ L"VertexShader.hlsl", ShaderTarget::VS });
+    ShaderResult ps = ctx.shaders->Compile({ L"PixelShader.hlsl",  ShaderTarget::PS });
+    if (!vs.ok || !ps.ok)
+        return false;
+
+    auto pso = PipelineBuilder(ctx.rootSignature)
+        .VS(vs.bytecode).PS(ps.bytecode).InputLayout(kVertexLayout)
         .RenderTarget(kHdrFormat).DepthFormat(kDepthFormat)
         .Cull(D3D12_CULL_MODE_NONE)
-        .Build(ctx.device, L"Forward PSO");
+        .TryBuild(ctx.device, L"Forward PSO");
+    if (!pso)
+    {
+        ctx.shaders->ReportError("Forward PSO", "CreateGraphicsPipelineState failed (see D3D12 debuf output)");
+        return false;
+    }
+
+    ReplacePso(ctx, m_pso, std::move(pso));
+    return true;
 }
 
 void ForwardPass::Execute(RenderContext& ctx)

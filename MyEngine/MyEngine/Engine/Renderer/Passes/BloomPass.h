@@ -8,6 +8,7 @@ class BloomPass : public RenderPass
 public:
     const wchar_t* Name() const override { return L"Bloom"; }
     void Init(const RenderInitContext& ctx) override;
+    bool CreatePipelines(const RenderInitContext& ctx) override;
     void Resize(const RenderInitContext& ctx, UINT width, UINT height) override;
     void Execute(RenderContext& ctx) override;
 

@@ -13,19 +13,37 @@
 #include "Engine/RHI/ShaderCompiler.h"
 
 void BloomPass::Init(const RenderInitContext& ctx)
+{    
+}
+
+bool BloomPass::CreatePipelines(const RenderInitContext& ctx)
 {
-    auto vs = ctx.shaders->CompileOrThrow({ L"FullscreenVS.hlsl", ShaderTarget::VS });
-    auto make = [&](const wchar_t* psFile, const wchar_t* name)
+    ShaderResult vs = ctx.shaders->Compile({ L"FullscreenVS.hlsl", ShaderTarget::VS });
+    ShaderResult bright = ctx.shaders->Compile({ L"BloomBrightPS.hlsl",  ShaderTarget::PS });
+    ShaderResult blur = ctx.shaders->Compile({ L"BloomBlurPS.hlsl",  ShaderTarget::PS });
+    if (!vs.ok || !bright.ok || !blur.ok)
+        return false;
+
+    auto make = [&](const ShaderResult& ps, const wchar_t* name)
         {
-            auto ps = ctx.shaders->CompileOrThrow({ psFile,  ShaderTarget::PS });
             return PipelineBuilder(ctx.rootSignature)
-                .VS(vs).PS(ps)
+                .VS(vs.bytecode).PS(ps.bytecode)
                 .RenderTarget(kHdrFormat)                     // 깊이 없음 → DepthFormat 생략(UNKNOWN)
                 .Cull(D3D12_CULL_MODE_NONE).DepthTest(false)
                 .Build(ctx.device, name);
         };
-    m_brightPSO = make(L"BloomBrightPS.hlsl", L"Bloom Bright PSO");
-    m_blurPSO = make(L"BloomBlurPS.hlsl", L"Bloom Blur PSO");
+    auto newBright = make(bright, L"Bloom Bright PSO");
+    auto newBlur = make(blur, L"Bloom Blur PSO");
+    if (!newBright || !newBlur)
+    {
+        ctx.shaders->ReportError("Bloom PSO", "CreateGraphicsPipelineState failed (see D3D12 debuf output)");
+        return false;
+    }
+
+    ReplacePso(ctx, m_brightPSO, std::move(newBright));
+    ReplacePso(ctx, m_blurPSO, std::move(newBlur));
+
+    return true;
 }
 
 void BloomPass::Resize(const RenderInitContext& ctx, UINT width, UINT height)

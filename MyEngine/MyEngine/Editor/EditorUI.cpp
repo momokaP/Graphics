@@ -61,9 +61,11 @@ void EditorUI::Draw(EditorContext& ctx)
 	if (ImGui::CollapsingHeader("Render"))                                    DrawRenderSettings(ctx);
 
 	// ── 씬 뷰 상호작용 (패널 밖) ──
-	HandleShortcuts();
+	HandleShortcuts(ctx);
 	DrawGizmo(ctx); // 먼저: 이번 프레임의 기즈모 hover 상태를 만듦
 	HandlePicking(ctx); // 나중: 기즈모 위 클릭이면 피킹하지 않음
+
+	DrawShaderErrors(ctx);
 }
 
 void EditorUI::DrawStats(EditorContext& ctx)
@@ -294,6 +296,7 @@ void EditorUI::DrawRenderSettings(EditorContext& ctx)
 	if (ImGui::Checkbox("VSync", &vsync)) ctx.renderer.SetVSync(vsync);
 	if (!ctx.renderer.IsTearingSupported())
 		ImGui::TextDisabled("(tearing not supported)");
+	if (ImGui::Button("Reload Shaders (F5)")) ctx.renderer.RequestShaderReload();
 }
 
 void EditorUI::DrawGizmoToolbar()
@@ -384,7 +387,7 @@ void EditorUI::HandlePicking(EditorContext& ctx)
 	}
 }
 
-void EditorUI::HandleShortcuts()
+void EditorUI::HandleShortcuts(EditorContext& ctx)
 {
 	const ImGuiIO& io = ImGui::GetIO();
 	if(io.WantTextInput||ImGui::IsMouseDown(ImGuiMouseButton_Right)) // 이름 입력 중, 비행 중이면 무시
@@ -392,4 +395,35 @@ void EditorUI::HandleShortcuts()
 	if (ImGui::IsKeyPressed(ImGuiKey_W)) m_gizmoOp = 0;
 	if (ImGui::IsKeyPressed(ImGuiKey_E)) m_gizmoOp = 1;
 	if (ImGui::IsKeyPressed(ImGuiKey_R)) m_gizmoOp = 2;
+	if (ImGui::IsKeyPressed(ImGuiKey_F5)) ctx.renderer.RequestShaderReload();
+}
+
+void EditorUI::DrawShaderErrors(EditorContext& ctx)
+{
+	const auto& errors = ctx.renderer.Shaders().Errors();
+	if (errors.empty()) return;
+
+	const D3D12_VIEWPORT& vp = ctx.view.viewport;
+	if (vp.Width <= 0.0f) return;
+
+	// 씬 뷰포트 위쪽에 고정, 폭은 뷰포트에 맞추고 높이는 내용만큼 (최대 뷰포트 절반)
+	ImGui::SetNextWindowPos(ImVec2(vp.TopLeftX + 10.0f, vp.TopLeftY + 10.0f), ImGuiCond_Always);
+	ImGui::SetNextWindowSizeConstraints(ImVec2(vp.Width - 20.0f, 0.0f), ImVec2(vp.Width - 20.0f, vp.Height * 0.5f));
+	ImGui::SetNextWindowBgAlpha(0.9f);
+
+	const ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize;
+	if (ImGui::Begin("Shader Errors", nullptr, flags))
+	{
+		ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+			"Shader error - previous shaders are still in use. Fix the file and press F5.");
+		for (const auto& [file, msg] : errors)
+		{
+			ImGui::SeparatorText(file.c_str());
+			ImGui::PushTextWrapPos(0.0f);              // 창 폭에서 줄바꿈
+			ImGui::TextUnformatted(msg.c_str());
+			ImGui::PopTextWrapPos();
+		}
+	}
+	ImGui::End();
 }

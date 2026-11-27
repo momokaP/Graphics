@@ -18,15 +18,31 @@ namespace
 
 void IdPass::Init(const RenderInitContext& ctx)
 {
-	auto vs = ctx.shaders->CompileOrThrow({ L"VertexShader.hlsl", ShaderTarget::VS });
-	auto ps = ctx.shaders->CompileOrThrow({ L"IdPS.hlsl",  ShaderTarget::PS });
-	m_pso = PipelineBuilder(ctx.rootSignature)
-		.VS(vs).PS(ps).InputLayout(kVertexLayout)
+	
+}
+
+bool IdPass::CreatePipelines(const RenderInitContext& ctx)
+{
+	ShaderResult vs = ctx.shaders->Compile({ L"VertexShader.hlsl", ShaderTarget::VS });
+	ShaderResult ps = ctx.shaders->Compile({ L"IdPS.hlsl",  ShaderTarget::PS });
+	if (!vs.ok || !ps.ok)
+		return false;
+
+	auto pso = PipelineBuilder(ctx.rootSignature)
+		.VS(vs.bytecode).PS(ps.bytecode).InputLayout(kVertexLayout)
 		.RenderTarget(DXGI_FORMAT_R32_UINT).DepthFormat(kDepthFormat)
 		.Cull(D3D12_CULL_MODE_NONE)
 		.DepthTest(true, D3D12_COMPARISON_FUNC_LESS) // 일반 깊이 테스트
 		.DepthWrite(true) // IdPass 안에서 가장 가까운 것이 이기도록
 		.Build(ctx.device, L"Id PSO");
+	if (!pso)
+	{
+		ctx.shaders->ReportError("Id PSO", "CreateGraphicsPipelineState failed (see D3D12 debuf output)");
+		return false;
+	}
+
+	ReplacePso(ctx, m_pso, std::move(pso));
+	return true;
 }
 
 void IdPass::Execute(RenderContext& ctx)

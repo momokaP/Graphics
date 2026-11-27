@@ -87,6 +87,9 @@ void Renderer::Init(const Desc& desc)
             m_tonemapPass.Init(ctx);
         });
 
+    if(!CreateAllPipelines()) // 시작 시 실패 = 그릴 수 없음 → 에러 내용과 함께 종료
+        throw std::runtime_error("Shader compilation failed at startup:\n\n" + m_shaderCompiler.ErrorSummary());
+
     CreateSizeDependentTargets(m_width, m_height);
     m_initialized = true;
 }
@@ -129,6 +132,13 @@ void Renderer::Resize(UINT width, UINT height)
 
 void Renderer::Render(const RenderScene& scene)
 {
+    if (m_reloadRequested) // 프레임 경계에서 (명령 기록 전)
+    {
+        m_reloadRequested = false;
+        const bool ok = CreateAllPipelines();
+        OutputDebugStringA(ok ? "[Shader] Reload OK\n" : "[Shader] Reload FAILED (previous shaders kept)\n");
+    }
+
     ResolvePick(); // 이 슬롯에 2프레임 전 기록한 복사가 있으면 읽음
     RecordFrame(scene);
 
@@ -332,6 +342,21 @@ void Renderer::RecordPickCopy(ID3D12GraphicsCommandList* cmd, UINT x, UINT y)
     m_pickPending[m_frameIndex] = true;
 }
 
+bool Renderer::CreateAllPipelines()
+{
+    RenderInitContext ctx = MakeInitContext();
+    bool ok = true;
+    // && 가 아니라 &= → 앞이 실패해도 나머지도 시도
+    // (에러를 한 번에 모두 보여 주기 위해)
+    ok &= m_skyboxPass.CreatePipelines(ctx);
+    ok &= m_forwardPass.CreatePipelines(ctx);
+    ok &= m_wireframePass.CreatePipelines(ctx);
+    ok &= m_idPass.CreatePipelines(ctx);
+    ok &= m_bloomPass.CreatePipelines(ctx);
+    ok &= m_tonemapPass.CreatePipelines(ctx);
+    return ok;
+}
+
 // ════════════════════════════ 에셋 지원 ════════════════════════════
 
 void Renderer::UploadResources(const std::function<void(DirectX::ResourceUploadBatch&)>& record)
@@ -363,6 +388,7 @@ RenderInitContext Renderer::MakeInitContext(DirectX::ResourceUploadBatch* upload
     c.frameCount = kFrameCount;
     c.upload = upload;
     c.shaders = &m_shaderCompiler;
+    c.deferredRelease = [this](Microsoft::WRL::ComPtr<ID3D12Pageable> o) { DeferredRelease(std::move(o)); };
     return c;
 }
 

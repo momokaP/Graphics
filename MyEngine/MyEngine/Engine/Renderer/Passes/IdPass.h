@@ -9,6 +9,7 @@ class IdPass :public RenderPass
 public:
 	const wchar_t* Name() const override { return L"IdPadd"; }
 	void Init(const RenderInitContext& ctx) override;
+	bool CreatePipelines(const RenderInitContext& ctx) override;
 	void Execute(RenderContext& ctx) override;
 
 	private:

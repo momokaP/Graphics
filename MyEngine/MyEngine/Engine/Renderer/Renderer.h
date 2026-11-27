@@ -64,6 +64,8 @@ public:
     // 피킹 결과 (요청 후 약 3프레임 뒤). 0 = 아무것도 없음, 그 외 = 엔티티 인덱스 + 1
     bool ConsumePickResult(uint32_t& outId);
 
+    void RequestShaderReload() { m_reloadRequested = true; }
+    const ShaderCompiler& Shaders() const { return m_shaderCompiler; }
 private:
     void CreateRootSignature();
     void CreateSizeDependentTargets(UINT width, UINT height);
@@ -119,4 +121,7 @@ private:
     float m_lastGpuWaitMs = 0.0f;
 
     float m_dbgPresentMs = 0;
+
+    bool CreateAllPipelines();
+    bool m_reloadRequested = false;
 };

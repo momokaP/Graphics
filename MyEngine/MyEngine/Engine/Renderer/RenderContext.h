@@ -1,5 +1,7 @@
 #pragma once
 #include <d3d12.h>
+#include <functional>
+#include <wrl.h>
 
 class LinearUploadAllocator;
 class DescriptorHeap;
@@ -23,6 +25,7 @@ struct RenderInitContext
     UINT                 frameCount = 0;
     DirectX::ResourceUploadBatch* upload = nullptr;    // Init 동안에만 유효 (Resize 때는 nullptr)
     ShaderCompiler* shaders = nullptr;
+    std::function<void(Microsoft::WRL::ComPtr<ID3D12Pageable>)> deferredRelease;
 };
 
 // 프레임마다 조율 쪽이 준비해서 패스들이 공유하는 렌더 타깃

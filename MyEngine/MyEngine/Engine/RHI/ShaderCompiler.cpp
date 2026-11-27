@@ -21,14 +21,20 @@ void ShaderCompiler::Init(const fs::path& sourceDir)
 	ThrowIfFailed(m_utils->CreateDefaultIncludeHandler(&m_includeHandler)); // #include "X.hlsli" 처리
 }
 
-std::vector<uint8_t> ShaderCompiler::CompileOrThrow(const ShaderDesc& desc)
+ShaderResult ShaderCompiler::Compile(const ShaderDesc& desc)
 {
+	ShaderResult r;
 	const fs::path fullPath = m_sourceDir / desc.file;
+	const std::string key = desc.file.string();
 
 	// ── 1) 소스 읽기 ──
 	ComPtr<IDxcBlobEncoding> source;
 	if (FAILED(m_utils->LoadFile(fullPath.c_str(), nullptr, &source)))
-		throw std::runtime_error("Shader file not found: " + fullPath.string());
+	{
+		r.messages = "Shader file not found: " + fullPath.string();
+		m_errors[key] = r.messages;
+		return r;
+	}
 
 	DxcBuffer buffer = {};
 	buffer.Ptr = source->GetBufferPointer();
@@ -63,16 +69,42 @@ std::vector<uint8_t> ShaderCompiler::CompileOrThrow(const ShaderDesc& desc)
 	ComPtr<IDxcBlobUtf8> errors;
 	result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr);
 	if (errors && errors->GetStringLength() > 0)
-		OutputDebugStringA(errors->GetStringPointer()); // "파일(줄,열): error: ..." → 출력 창에서 더블클릭하면 이동
+	{
+		r.messages = errors->GetStringPointer();
+		OutputDebugStringA(r.messages.c_str());
+	}
 
 	HRESULT status = S_OK;
 	result->GetStatus(&status);
 	if (FAILED(status))
-		throw std::runtime_error("Shader compile failed: " + fullPath.string());
+	{
+		if(r.messages.empty()) r.messages = "Unknown compile error";
+		m_errors[key] = r.messages; // 실패 기록
+		return r; // ok = false, bytecode 비어 있음
+	}
 
 	// ── 5) DXIL 꺼내기 ──
 	ComPtr<IDxcBlob> object;
 	ThrowIfFailed(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&object), nullptr));
 	const auto* p = static_cast<const uint8_t*>(object->GetBufferPointer());
-	return std::vector<uint8_t>(p, p + object->GetBufferSize());
+	r.bytecode.assign(p, p + object->GetBufferSize());
+	r.ok = true;
+	m_errors.erase(key); // 이 파일은 이제 정상
+	return r;
+}
+
+std::vector<uint8_t> ShaderCompiler::CompileOrThrow(const ShaderDesc& desc)
+{
+	ShaderResult r = Compile(desc);
+	if (!r.ok)
+		throw std::runtime_error(desc.file.string() + "\n\n" + r.messages); // DXC 에러 내용까지
+	return std::move(r.bytecode);
+}
+
+std::string ShaderCompiler::ErrorSummary() const
+{
+	std::string s;
+	for (const auto& [file, msg] : m_errors)
+		s += "[" + file + "]\n" + msg + "\n";
+	return s;
 }

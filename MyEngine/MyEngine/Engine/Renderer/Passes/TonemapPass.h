@@ -7,6 +7,7 @@ class TonemapPass : public RenderPass
 public:
     const wchar_t* Name() const override { return L"Tonemap"; }
     void Init(const RenderInitContext& ctx) override;
+    bool CreatePipelines(const RenderInitContext& ctx) override;
     void Execute(RenderContext& ctx) override;
 
 private:
