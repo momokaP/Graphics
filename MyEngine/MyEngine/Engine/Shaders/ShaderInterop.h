@@ -19,7 +19,11 @@ namespace hlsl
     using uint = uint32_t;
 }
 #else
-#pragma pack_matrix(row_major)     // 셰이더가 행렬을 C++(SimpleMath)과 같은 행 단위로 읽음 → Transpose 불필요
+// 행렬 패킹은 ShaderCompiler의 -Zpr 인자가 정한다 (C++ SimpleMath와 같은 행 우선)
+//   다른 도구로 컴파일하면 -Zpr이 빠져 행렬이 조용히 전치되므로, 그런 경우 컴파일 에러로 막음
+#ifndef ENGINE_SHADER_COMPILER
+#error "Compile shaders through ShaderCompiler (requires -Zpr). See ShaderCompiler.cpp."
+#endif
 #define INTEROP_BEGIN
 #define INTEROP_END
 #endif

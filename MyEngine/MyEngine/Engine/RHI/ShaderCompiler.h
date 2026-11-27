@@ -4,6 +4,11 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <d3dcommon.h> // D3D_SHADER_MODEL
+
+// 셰이더 모델은 이곳에서만 정한다. 두 줄은 항상 같은 버전이어야 함
+#define ENGINE_SM_SUFFIX L"6_6"
+inline constexpr D3D_SHADER_MODEL kRequiredShaderModel = D3D_SHADER_MODEL_6_6;
 
 struct IDxcUtils;
 struct IDxcCompiler3;
@@ -12,9 +17,9 @@ struct IDxcIncludeHandler;
 // 셰이더 타깃은 이곳에서만 정한다
 namespace ShaderTarget
 {
-	inline constexpr const wchar_t* VS = L"vs_6_0";
-	inline constexpr const wchar_t* PS = L"ps_6_0";
-	inline constexpr const wchar_t* CS = L"cs_6_0";
+	inline constexpr const wchar_t* VS = L"vs_" ENGINE_SM_SUFFIX;
+	inline constexpr const wchar_t* PS = L"ps_" ENGINE_SM_SUFFIX;
+	inline constexpr const wchar_t* CS = L"cs_" ENGINE_SM_SUFFIX;
 }
 
 struct ShaderDesc

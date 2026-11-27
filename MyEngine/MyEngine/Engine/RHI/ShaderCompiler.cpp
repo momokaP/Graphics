@@ -43,6 +43,8 @@ std::vector<uint8_t> ShaderCompiler::CompileOrThrow(const ShaderDesc& desc)
 		L"-T", desc.target,
 		L"-I", includeDir.c_str(),
 		L"-HV", L"2021",             // HLSL 버전 명시 (최신 DXC의 기본값이지만 명시해 둠)
+		L"-Zpr", // 행렬을 행 우선으로 패킹 (C++ SimpleMath와 같은 메모리 배치)
+		L"-D", L"ENGINE_SHADER_COMPILER", // 이 컴파일러를 거쳤다는 표시(ShaderInterop.h가 검사)
 #ifdef _DEBUG
 		L"-Od",                      // 최적화 끔: 디버깅 시 변수가 사라지지 않게
 		L"-Zi", L"-Qembed_debug",    // 디버그 정보를 DXIL 안에 포함 (4-2에서 PIX 소스 디버깅에 사용)

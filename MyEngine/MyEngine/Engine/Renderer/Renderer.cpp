@@ -27,6 +27,11 @@ void Renderer::Init(const Desc& desc)
     m_height = desc.height;
 
     m_gfx.Init(desc.useWarp);
+
+    // 셰이더 모델 확인: 지원 안 하면 PSO 생성의 알 수 없는 실패 대신 여기서 명확하게 멈춤
+    if (m_gfx.GetCaps().highestShaderModel < kRequiredShaderModel)
+        throw std::runtime_error("This GPU/dirver does not support Shader Model 6.6. Update the GPU driver.");
+
     ID3D12Device* device = m_gfx.Device();
 
     m_rtvHeap.Init(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false, L"RTV Heap");

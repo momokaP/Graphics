@@ -23,8 +23,18 @@ extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\
 _Use_decl_annotations_
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
-	App app(1280, 720, kAppTitle);
-	return Win32Application::Run(&app, hInstance, nCmdShow);
+	try
+	{
+		App app(1280, 720, kAppTitle);
+		return Win32Application::Run(&app, hInstance, nCmdShow);
+	}
+	catch (const std::exception& e)
+	{
+		OutputDebugStringA(e.what());
+		OutputDebugStringA("\n");
+		MessageBoxA(nullptr, e.what(), "MyEngine - Fatal Error", MB_OK | MB_ICONERROR);
+		return -1;
+	}
 }
 
 int main()
