@@ -9,11 +9,12 @@
 #include "DXSampleHelper.h"     // LoadShader, ThrowIfFailed
 #include "Paths.h"
 #include "Vertex.h"
+#include "Engine/RHI/ShaderCompiler.h"
 
 void ForwardPass::Init(const RenderInitContext& ctx)
 {
-    auto vs = LoadShader(Paths::Shader(L"VertexShader.cso"));
-    auto ps = LoadShader(Paths::Shader(L"PixelShader.cso"));
+    auto vs = ctx.shaders->CompileOrThrow({ L"VertexShader.hlsl", ShaderTarget::VS });
+    auto ps = ctx.shaders->CompileOrThrow({ L"PixelShader.hlsl",  ShaderTarget::PS });
     m_pso = PipelineBuilder(ctx.rootSignature)
         .VS(vs).PS(ps).InputLayout(kVertexLayout)
         .RenderTarget(kHdrFormat).DepthFormat(kDepthFormat)

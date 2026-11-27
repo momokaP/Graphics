@@ -117,6 +117,9 @@
     <ClCompile Include="Engine\Renderer\Passes\IdPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\RHI\ShaderCompiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -248,6 +251,9 @@
     <ClInclude Include="Engine\Renderer\Passes\IdPass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\RHI\ShaderCompiler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -257,31 +263,29 @@
     <None Include="imgui.ini" />
     <None Include="Engine\Shaders\SceneCommon.hlsli" />
     <None Include="Engine\Shaders\Bindings.hlsli" />
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Engine\Shaders\VertexShader.hlsl">
+    <None Include="Engine\Shaders\BloomBlurPS.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\PixelShader.hlsl">
+    </None>
+    <None Include="Engine\Shaders\BloomBrightPS.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\CubeMappingPixelShader.hlsl">
+    </None>
+    <None Include="Engine\Shaders\BloomCombinePS.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\FullscreenVS.hlsl">
+    </None>
+    <None Include="Engine\Shaders\CubeMappingPixelShader.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\BloomBrightPS.hlsl">
+    </None>
+    <None Include="Engine\Shaders\FullscreenVS.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\BloomBlurPS.hlsl">
+    </None>
+    <None Include="Engine\Shaders\IdPS.hlsl" />
+    <None Include="Engine\Shaders\PixelShader.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\BloomCombinePS.hlsl">
+    </None>
+    <None Include="Engine\Shaders\VertexShader.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\WireFramePixelShader.hlsl" />
-    <FxCompile Include="Engine\Shaders\IdPS.hlsl" />
+    </None>
+    <None Include="Engine\Shaders\WireFramePixelShader.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Copyright.txt" />

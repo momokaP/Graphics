@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "Paths.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderTypes.h"
 #include "Renderer/RenderScene.h"
@@ -64,6 +65,8 @@ void Renderer::Init(const Desc& desc)
             nullptr, IID_PPV_ARGS(&m_pickReadback)));
         m_pickReadback->SetName(L"Pick Readback");
     }
+
+    m_shaderCompiler.Init(Paths::ShaderSourceDir());
 
     CreateRootSignature();
 
@@ -354,6 +357,7 @@ RenderInitContext Renderer::MakeInitContext(DirectX::ResourceUploadBatch* upload
     c.backBufferFormat = m_swapChain.Format();
     c.frameCount = kFrameCount;
     c.upload = upload;
+    c.shaders = &m_shaderCompiler;
     return c;
 }
 

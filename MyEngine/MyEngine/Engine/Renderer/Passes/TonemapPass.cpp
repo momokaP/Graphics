@@ -9,11 +9,12 @@
 #include "DXSampleHelper.h"     // LoadShader, ThrowIfFailed
 #include "Paths.h"
 #include "Vertex.h"
+#include "Engine/RHI/ShaderCompiler.h"
 
 void TonemapPass::Init(const RenderInitContext& ctx)
 {
-    auto vs = LoadShader(Paths::Shader(L"FullscreenVS.cso"));
-    auto ps = LoadShader(Paths::Shader(L"BloomCombinePS.cso"));
+    auto vs = ctx.shaders->CompileOrThrow({ L"FullscreenVS.hlsl", ShaderTarget::VS });
+    auto ps = ctx.shaders->CompileOrThrow({ L"BloomCombinePS.hlsl",  ShaderTarget::PS });
     m_pso = PipelineBuilder(ctx.rootSignature)
         .VS(vs).PS(ps)
         .RenderTarget(ctx.backBufferFormat)

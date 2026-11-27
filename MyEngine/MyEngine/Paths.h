@@ -25,7 +25,10 @@ public:
         return std::filesystem::path(std::u8string(s.begin(), s.end()));   // UTF-8로 해석하게 강제
     }
 
+    static std::filesystem::path ShaderSourceDir() { return s_shaderSourceDir; }
+
 private:
     static inline std::filesystem::path s_exeDir;
     static inline std::filesystem::path s_assetDir;
+    static inline std::filesystem::path s_shaderSourceDir;
 };

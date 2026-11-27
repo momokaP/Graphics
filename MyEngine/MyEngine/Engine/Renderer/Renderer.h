@@ -8,6 +8,7 @@
 #include "RHI/Texture.h"
 #include "RHI/LinearUploadAllocator.h"
 #include "RHI/DeferredReleaseQueue.h"
+#include "RHI/ShaderCompiler.h"
 
 #include "Renderer/RenderContext.h"
 #include "Renderer/Passes/SkyboxPass.h"
@@ -89,6 +90,7 @@ private:
     LinearUploadAllocator m_uploadAlloc;
     DeferredReleaseQueue  m_releaseQueue;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
+    ShaderCompiler m_shaderCompiler;
 
     // 여러 패스가 공유하는 렌더 타깃
     Texture m_sceneColor, m_depth;

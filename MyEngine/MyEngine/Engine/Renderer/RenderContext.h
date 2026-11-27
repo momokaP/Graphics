@@ -5,6 +5,8 @@ class LinearUploadAllocator;
 class DescriptorHeap;
 class Texture;
 class GpuResource;
+class ShaderCompiler;
+
 struct RenderScene;
 namespace DirectX { class ResourceUploadBatch; }
 
@@ -20,6 +22,7 @@ struct RenderInitContext
     DXGI_FORMAT          backBufferFormat = DXGI_FORMAT_UNKNOWN;
     UINT                 frameCount = 0;
     DirectX::ResourceUploadBatch* upload = nullptr;    // Init 동안에만 유효 (Resize 때는 nullptr)
+    ShaderCompiler* shaders = nullptr;
 };
 
 // 프레임마다 조율 쪽이 준비해서 패스들이 공유하는 렌더 타깃

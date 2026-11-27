@@ -10,21 +10,22 @@
 #include "DXSampleHelper.h"     // LoadShader, ThrowIfFailed
 #include "Paths.h"
 #include "Vertex.h"
+#include "Engine/RHI/ShaderCompiler.h"
 
 void BloomPass::Init(const RenderInitContext& ctx)
 {
-    auto vs = LoadShader(Paths::Shader(L"FullscreenVS.cso"));
+    auto vs = ctx.shaders->CompileOrThrow({ L"FullscreenVS.hlsl", ShaderTarget::VS });
     auto make = [&](const wchar_t* psFile, const wchar_t* name)
         {
-            auto ps = LoadShader(Paths::Shader(psFile));
+            auto ps = ctx.shaders->CompileOrThrow({ psFile,  ShaderTarget::PS });
             return PipelineBuilder(ctx.rootSignature)
                 .VS(vs).PS(ps)
                 .RenderTarget(kHdrFormat)                     // 깊이 없음 → DepthFormat 생략(UNKNOWN)
                 .Cull(D3D12_CULL_MODE_NONE).DepthTest(false)
                 .Build(ctx.device, name);
         };
-    m_brightPSO = make(L"BloomBrightPS.cso", L"Bloom Bright PSO");
-    m_blurPSO = make(L"BloomBlurPS.cso", L"Bloom Blur PSO");
+    m_brightPSO = make(L"BloomBrightPS.hlsl", L"Bloom Bright PSO");
+    m_blurPSO = make(L"BloomBlurPS.hlsl", L"Bloom Blur PSO");
 }
 
 void BloomPass::Resize(const RenderInitContext& ctx, UINT width, UINT height)

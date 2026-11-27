@@ -9,6 +9,7 @@
 #include "DXSampleHelper.h"
 #include "Paths.h"
 #include "Vertex.h"
+#include "Engine/RHI/ShaderCompiler.h"
 
 namespace
 {
@@ -17,8 +18,8 @@ namespace
 
 void IdPass::Init(const RenderInitContext& ctx)
 {
-	auto vs = LoadShader(Paths::Shader(L"VertexShader.cso")); // Forward와 같은 VS → 같은 깊이
-	auto ps = LoadShader(Paths::Shader(L"IdPS.cso"));
+	auto vs = ctx.shaders->CompileOrThrow({ L"VertexShader.hlsl", ShaderTarget::VS });
+	auto ps = ctx.shaders->CompileOrThrow({ L"IdPS.hlsl",  ShaderTarget::PS });
 	m_pso = PipelineBuilder(ctx.rootSignature)
 		.VS(vs).PS(ps).InputLayout(kVertexLayout)
 		.RenderTarget(DXGI_FORMAT_R32_UINT).DepthFormat(kDepthFormat)

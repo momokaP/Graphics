@@ -178,6 +178,7 @@
     <ClCompile Include="Engine\RHI\LinearUploadAllocator.cpp" />
     <ClCompile Include="Engine\RHI\PipelineBuilder.cpp" />
     <ClCompile Include="Engine\RHI\RootSignatureBuilder.cpp" />
+    <ClCompile Include="Engine\RHI\ShaderCompiler.cpp" />
     <ClCompile Include="Engine\RHI\SwapChain.cpp" />
     <ClCompile Include="Engine\RHI\Texture.cpp" />
     <ClCompile Include="Engine\Scene\Camera.cpp" />
@@ -212,6 +213,7 @@
     <ClInclude Include="Engine\Renderer\RenderTypes.h" />
     <ClInclude Include="Engine\Renderer\RenderScene.h" />
     <ClInclude Include="Engine\Renderer\Renderer.h" />
+    <ClInclude Include="Engine\RHI\ShaderCompiler.h" />
     <ClInclude Include="Engine\Scene\Camera.h" />
     <ClInclude Include="Engine\Scene\Picking.h" />
     <ClInclude Include="Engine\Scene\Scene.h" />
@@ -246,7 +248,7 @@
     <None Include="Engine\Shaders\PostCommon.hlsli" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Engine\Shaders\BloomBlurPS.hlsl">
+    <None Include="Engine\Shaders\BloomBlurPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -255,8 +257,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\BloomBrightPS.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\BloomBrightPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -265,8 +268,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\BloomCombinePS.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\BloomCombinePS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -275,8 +279,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\CubeMappingPixelShader.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\CubeMappingPixelShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -285,8 +290,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\FullscreenVS.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\FullscreenVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
@@ -295,8 +301,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\IdPS.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\IdPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -305,8 +312,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\PixelShader.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\PixelShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -315,8 +323,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\VertexShader.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\VertexShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
@@ -325,8 +334,9 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Engine\Shaders\WireFramePixelShader.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Engine\Shaders\WireFramePixelShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
@@ -335,7 +345,8 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
-    </FxCompile>
+      <FileType>Document</FileType>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Copyright.txt" />
